@@ -15,3 +15,6 @@ build/
 # Secrets
 .env
 .env.*
+
+# 사내 자료(알람리스트·일일운전보고 추출본)는 공개 저장소에 올리지 않음
+alarm-app/data/

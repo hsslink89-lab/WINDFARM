@@ -1,0 +1,471 @@
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>U93 알람 노트</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one-column phone app — sticky search bar, alarm card with 4 tabs, floating "조치 등록" button */
+:root{
+  --bg:#eef2f4; --surface:#ffffff; --ink:#14232c; --muted:#5b6b75; --line:#d5dde2;
+  --steel:#1f4e63; --steel-soft:#dbe8ee; --amber:#d98a00; --amber-soft:#fff1d6;
+  --ok:#2c7a4b; --ok-soft:#dff1e6; --warn:#b26a00; --crit:#b3261e; --crit-soft:#fbe3e1;
+  --zone:#c9d6dc; --zone-hi:#f2a516;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1a20; --surface:#17262e; --ink:#e4edf1; --muted:#97a9b3; --line:#2b3f49;
+  --steel:#7fb8d1; --steel-soft:#1f3743; --amber:#f2a516; --amber-soft:#3a2c0d;
+  --ok:#6fcf97; --ok-soft:#15352a; --warn:#f2b45a; --crit:#ff8a80; --crit-soft:#3f1d1b;
+  --zone:#2f4651; --zone-hi:#f2a516; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a20; --surface:#17262e; --ink:#e4edf1; --muted:#97a9b3; --line:#2b3f49;
+  --steel:#7fb8d1; --steel-soft:#1f3743; --amber:#f2a516; --amber-soft:#3a2c0d;
+  --ok:#6fcf97; --ok-soft:#15352a; --warn:#f2b45a; --crit:#ff8a80; --crit-soft:#3f1d1b;
+  --zone:#2f4651; --zone-hi:#f2a516; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:720px;margin:0 auto}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 10px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.brand h1{font-size:18px;margin:0;letter-spacing:-.01em}
+.brand h1 span{font-family:var(--f-mono);color:var(--amber);font-size:13px;margin-left:6px;letter-spacing:.04em}
+.sync{font-size:12px;color:var(--muted)}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;font:700 22px/1 var(--f-mono);letter-spacing:.08em;padding:12px 14px;border:2px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.search input:focus{outline:none;border-color:var(--steel)}
+.search input::placeholder{font:400 15px var(--f-body);letter-spacing:0;color:var(--muted)}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 12px;font-size:14px}
+.btn:focus-visible,.tab:focus-visible,.chip:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.btn.primary{background:var(--steel);border-color:var(--steel);color:var(--surface);font-weight:700}
+.btn.ghost{background:transparent}
+.nav{display:flex;gap:6px;overflow-x:auto}
+.nav .chip{white-space:nowrap}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:5px 11px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--steel);border-color:var(--steel);color:var(--surface)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.mono{font-family:var(--f-mono)}
+section.view{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding-top:6px}
+h2{font-size:15px;margin:0;letter-spacing:.01em}
+.label{font-size:12px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.list{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;color:var(--ink);width:100%}
+.row .code{font:700 17px var(--f-mono);color:var(--steel)}
+.row .nm{min-width:0;overflow-wrap:anywhere;font-size:14px}
+.row .nm small{display:block;color:var(--muted);font-size:12px}
+.cnt{font:500 12px var(--f-mono);color:var(--muted);text-align:right}
+.lv{display:inline-block;font:700 11px var(--f-mono);padding:2px 7px;border-radius:4px;letter-spacing:.04em}
+.lv.w{background:var(--amber-soft);color:var(--warn)}
+.lv.e{background:var(--crit-soft);color:var(--crit)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.hero{display:grid;gap:8px}
+.hero .big{font:700 40px/1 var(--f-mono);color:var(--steel);letter-spacing:.03em}
+.hero .title{font-size:17px;font-weight:700;overflow-wrap:anywhere}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.fact{border-top:2px solid var(--line);padding-top:6px;min-width:0}
+.fact b{display:block;font-size:14px;overflow-wrap:anywhere}
+.fact span{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;border:none;border-bottom:3px solid transparent;padding:9px 12px;color:var(--muted);font-weight:500;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--amber);font-weight:700}
+.pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.src{font-size:12px;color:var(--muted);border-left:3px solid var(--line);padding-left:8px}
+.badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:4px;font-weight:700}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.chk{background:var(--amber-soft);color:var(--warn)}
+.badge.new{background:var(--steel-soft);color:var(--steel)}
+.note{background:var(--amber-soft);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:13px}
+.note b{color:var(--warn)}
+.hist{display:grid;gap:8px}
+.h{border-left:3px solid var(--steel-soft);padding:4px 0 4px 10px}
+.h .meta{font:500 12px var(--f-mono);color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.h.mine{border-left-color:var(--amber)}
+.bars{display:grid;gap:4px}
+.bar{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;align-items:center;font-size:13px}
+.bar .t{position:relative;padding:4px 8px;border-radius:4px;overflow:hidden;overflow-wrap:anywhere}
+.bar .t i{position:absolute;inset:0 auto 0 0;background:var(--steel-soft);z-index:0}
+.bar .t span{position:relative}
+.bar .n{font:500 12px var(--f-mono);text-align:right;color:var(--muted)}
+ol.steps{margin:0;padding-left:20px;display:grid;gap:6px}
+.diagram{overflow-x:auto}
+.diagram svg{width:100%;max-width:640px;height:auto;display:block}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-2px;margin-right:4px}
+.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.imgs figure{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.imgs img{width:100%;height:auto;display:block}
+.imgs figcaption{font-size:12px;padding:6px 8px;overflow-wrap:anywhere}
+.fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:6;background:var(--amber);color:#1b1300;border:none;border-radius:999px;padding:14px 18px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+form.f{display:grid;gap:10px}
+.f label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.f input,.f select,.f textarea{font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+.f textarea{min-height:76px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media (max-width:420px){.grid3{grid-template-columns:1fr 1fr}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 80px);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:14px;z-index:9;max-width:90vw}
+.empty{padding:14px;text-align:center;color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.del{color:var(--crit);border-color:transparent;background:transparent;padding:2px 6px;font-size:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>U93 알람 노트<span>UNISON 2MW</span></h1>
+      <span class="sync" id="sync">불러오는 중…</span>
+    </div>
+    <form class="search" id="searchForm" autocomplete="off">
+      <input id="q" type="search" inputmode="search" placeholder="알람코드 또는 키워드 (예: 5013, pitch)" aria-label="알람코드 또는 키워드">
+      <button class="btn primary" type="submit">조회</button>
+    </form>
+    <nav class="nav" aria-label="화면">
+      <button class="chip" data-go="home" aria-pressed="true">홈</button>
+      <button class="chip" data-go="log" aria-pressed="false">등록된 조치</button>
+      <button class="chip" data-go="about" aria-pressed="false">자료 출처</button>
+    </nav>
+  </header>
+
+  <main id="main"></main>
+</div>
+<button class="fab" id="fab" type="button">+ 조치 등록</button>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(()=>{
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const main=$('#main');
+let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[];
+let db=null,assets=null,user=null,downloads=null,myId=null;
+let state={view:'home',code:null,tab:'meaning',query:''};
+
+/* ---------- reference tables (from UNS-U93(88)-S135K-000 p.4–5) ---------- */
+const BRAKE={'0':'Braking 동작 안 함','10':'상용전원 피치 Feathering (공력 제동)','20':'배터리 피치 Feathering (공력 제동)','50':'배터리 Feathering 후 저속에서 기계 브레이크','100':'공력 + 기계 브레이크 즉시 동작'};
+const YAW={'0':'Yaw 자동 동작','10':'Unwinding yaw 자동 동작','20':'자동 Yaw 안 됨 · Manual unwinding 필요','100':'Yaw 자동 동작 안 됨'};
+const RESET={A:'자동',R:'원격(Remote)',L:'로컬(Local)',M:'현장 HMI Manual'};
+function resetText(r){ if(!r||r==='-')return '—'; const p=r.replace(/\./g,',').split(','); return p.map(x=>x.split('').map(ch=>RESET[ch]||ch).join('/')).join(', ')+' ('+r+')'; }
+
+/* ---------- concept location map ---------- */
+const ZONES=[
+ {id:'hub',name:'허브 · 피치',kw:/pitch|blade|hub|axis|battery|pitchmaster|fuse \d|limit sw/i,cat:'5'},
+ {id:'mb',name:'메인베어링 · 로터락/브레이크',kw:/main bearing|rotor lock|rotor brake|gr rotor|rb |hyd\. ?rotor|rotor heater/i},
+ {id:'gb',name:'기어박스',kw:/g\/b|gear/i,cat:'3'},
+ {id:'gen',name:'발전기',kw:/\bgen\b|generator|gr gen/i,cat:'2'},
+ {id:'cs',name:'냉각 시스템',kw:/\bcs\b|cooling|coolant/i,cat:'6'},
+ {id:'ncu',name:'나셀 제어반 · 센서',kw:/nacelle|anemo|vane|wind|accelero|ncu|panel|ventilat|vibration/i,cat:'1'},
+ {id:'yaw',name:'요 시스템',kw:/yaw|cable twist|\byb\b|unwind/i,cat:'7'},
+ {id:'pcs',name:'PCS (설치 위치 현장 확인)',kw:/pcs|gsc|lsc|converter|inverter|igbt|rmio|aint|dc link|dc over|dc under|acb|du\/dt|charging/i,cat:'4'},
+ {id:'tcu',name:'타워 하부 제어반',kw:/tcu|tower|ups|scada|remote|grid|comm/i,cat:'0'},
+ {id:'tr',name:'변압기 · 계통',kw:/load tr|transformer|grid (over|under|volt|freq)|vcb/i}
+];
+function zonesFor(a){
+  const n=a.name;
+  const hit=ZONES.filter(z=>z.kw.test(n)).map(z=>z.id);
+  if(hit.length) return [...new Set(hit)].slice(0,3);
+  const z=ZONES.find(z=>z.cat===a.code[1]); return z?[z.id]:[];
+}
+function diagramSVG(hi){
+  const f=id=>hi.includes(id)?'var(--zone-hi)':'var(--zone)';
+  const s=id=>hi.includes(id)?'var(--ink)':'var(--line)';
+  const tx=id=>hi.includes(id)?'700':'400';
+  const box=(id,x,y,w,h,label,dash)=>`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${f(id)}" stroke="${s(id)}" stroke-width="${hi.includes(id)?2:1}" ${dash?'stroke-dasharray="5 4"':''}/><text x="${x+w/2}" y="${y+h/2+4}" text-anchor="middle" font-size="11" font-weight="${tx(id)}" fill="var(--ink)">${label}</text></g>`;
+  return `<svg viewBox="0 0 640 420" role="img" aria-label="U93 점검 위치 개념도">
+  <rect x="0" y="0" width="640" height="420" fill="var(--surface)"/>
+  <rect x="300" y="150" width="40" height="230" fill="var(--bg)" stroke="var(--line)"/>
+  <line x1="40" y1="382" x2="620" y2="382" stroke="var(--muted)" stroke-width="2"/>
+  <rect x="120" y="40" width="470" height="110" rx="10" fill="var(--bg)" stroke="var(--muted)"/>
+  <text x="580" y="34" text-anchor="end" font-size="11" fill="var(--muted)">나셀</text>
+  <path d="M60 60 L20 10 L34 6 L72 56Z M60 120 L20 170 L34 176 L72 126Z" fill="var(--line)"/>
+  ${box('hub',36,62,86,60,'허브·피치')}
+  ${box('mb',130,62,92,60,'메인베어링')}
+  ${box('gb',228,62,90,60,'기어박스')}
+  ${box('gen',326,62,90,60,'발전기')}
+  ${box('cs',424,62,74,60,'냉각')}
+  ${box('ncu',506,62,78,60,'나셀제어반')}
+  ${box('yaw',250,128,140,20,'요 시스템')}
+  ${box('pcs',200,250,90,46,'PCS ?',true)}
+  ${box('tcu',300,320,110,46,'하부 제어반')}
+  ${box('tr',470,320,110,46,'변압기·계통')}
+  <text x="20" y="408" font-size="11" fill="var(--muted)">개념도 · 실제 배치/단자는 해당 도면 확인 (PCS 위치는 현장 확인)</text>
+  </svg>`;
+}
+
+/* ---------- general check guide (not an official Unison procedure) ---------- */
+function guide(a){
+  const n=a.name.toLowerCase(), out=[];
+  const add=s=>{if(!out.includes(s))out.push(s)};
+  add('SCADA에서 알람 발생 시각 전후 데이터(풍속·출력·온도·상태신호) 추세를 먼저 확인하고, 동시 발생 알람을 함께 기록');
+  if(/mms trip/.test(n)){add('해당 MMS(모터보호차단기) 트립 상태 확인 → 복귀 전 부하(모터/히터) 과전류·절연 이상 원인 확인');add('MMS 상태 접점 → 입력 모듈 배선/단자 체결 상태 확인');}
+  if(/mc fault/.test(n)){add('운전 지령 후 MC 투입 여부 확인: MC 코일 전압, 보조접점(상태 신호), 출력·입력 모듈 배선 확인');}
+  if(/sensor|defect|disconnect/.test(n)&&/temp/.test(n)){add('센서 신호 범위 이탈 여부: 센서 배선 단선·접촉 불량, 커넥터 확인');add('PT100 계열이면 센서 단자에서 저항 측정 후 실제 온도와 비교 (기준값은 센서 사양서 확인)');}
+  if(/temp high|over temp|temp low/.test(n)){add('실제 온도 이상인지 센서 오류인지 구분: 인접 센서·동일 부위 다른 호기 값과 비교');add('냉각/환기 경로(팬, 필터, 냉각수 유량), 히터 동작 상태 확인');}
+  if(/pressure/.test(n)){add('현장 압력계 실측값과 센서 표시값 비교, 누유·누수 여부, 펌프/어큐뮬레이터 상태 확인');}
+  if(/comm|communication|can|heart/.test(n)){add('통신 케이블·커넥터·광케이블 상태, 해당 노드 전원 및 상태 LED 확인');}
+  if(/fuse/.test(n)){add('퓨즈 단선 시 교체 전 원인(단락·과부하·절연 저하) 확인 · 동일 규격으로 교체');}
+  if(/over current|overcurrent/.test(n)){add('부하측 기계적 구속(피치 베어링/기어 등), 모터 절연저항, 드라이브 상태 확인');}
+  if(/emergency|safety/.test(n)){add('비상정지 스위치 위치별 상태 확인 → 안전루프(Safety chain) 경로 순서대로 점검');}
+  if(/battery/.test(n)){add('배터리 전압·충전기 상태 확인 (작업 전 잔류 에너지 방전 상태 확인 필요)');}
+  if(/filter clog/.test(n)){add('필터 차압/오염 상태 확인 후 교체 이력 기록');}
+  if(/grease|^gr /.test(n)){add('그리스 잔량·펌프 동작·배관 막힘 확인, 보충 이력 기록');}
+  add('원인 제거 확인 후 리셋 → 재가동 후 동일 알람 재발 여부를 SCADA로 추적 (반복 알람 3013 조건 유의)');
+  return out;
+}
+
+/* ---------- data loading ---------- */
+async function loadStatic(){
+  try{
+    const [a,h,s]=await Promise.all([fetch('data/alarms.json').then(r=>r.json()),fetch('data/history.json').then(r=>r.json()),fetch('data/sources.json').then(r=>r.json()).catch(()=>[])]);
+    ALARMS=a;HIST=h;SOURCES=s;
+    for(const x of ALARMS)BY[x.code]=x;
+    for(const r of HIST)for(const c of r.c)(HBY[c]=HBY[c]||[]).push(r);
+    for(const k in HBY)HBY[k].sort((p,q)=>q.d.localeCompare(p.d));
+  }catch(e){ main.innerHTML='<div class="empty">기본 데이터(data/alarms.json)를 불러오지 못했습니다. 파일 위치를 확인하세요.</div>'; throw e; }
+}
+const LS_KEY='u93-alarm-notes';
+function lsGet(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'{"sol":[],"drw":[]}')}catch(e){return {sol:[],drw:[]}}}
+function lsSet(o){try{localStorage.setItem(LS_KEY,JSON.stringify(o))}catch(e){}}
+async function connect(){
+  const c=window.claude;
+  if(!c||!c.use){ localMode(); return; }
+  const t=setTimeout(()=>{ if(!db) localMode(); },10000);
+  try{
+    [db,assets,user,downloads]=await Promise.all([c.use('db'),c.use('assets'),c.use('user'),c.use('downloads')]);
+  }catch(e){}
+  clearTimeout(t);
+  if(!db){ localMode(); return; }
+  try{ myId=user?await user.id():null; }catch(e){}
+  db.collection('solutions').orderBy('createdAt','desc').onSnapshot(s=>{SOL=s.docs.map(d=>({id:d.id,...d.data()}));setSync('공유 저장소 연결됨 · 등록 '+SOL.length+'건');render();},e=>setSync('공유 저장소 오류: '+e.code));
+  db.collection('drawings').orderBy('createdAt','desc').onSnapshot(s=>{DRW=s.docs.map(d=>({id:d.id,...d.data()}));render();},()=>{});
+}
+function localMode(){ if(db)return; const o=lsGet(); SOL=o.sol;DRW=o.drw; setSync('이 기기에만 저장 (오프라인 모드)'); render(); }
+function setSync(t){$('#sync').textContent=t}
+
+/* ---------- helpers ---------- */
+function lvl(a){const w=a.code[0]==='1';return `<span class="lv ${w?'w':'e'}">${esc(a.level||'')}</span>`}
+function solFor(code){return SOL.filter(s=>s.code===code)}
+function drwFor(code){return DRW.filter(s=>s.code===code)}
+function freq(){const m={};for(const r of HIST)for(const c of r.c)m[c]=(m[c]||0)+1;return m}
+let FREQ=null;
+function searchAlarms(q){
+  q=q.trim().toLowerCase(); if(!q)return [];
+  if(/^\d{1,4}$/.test(q)) return ALARMS.filter(a=>a.code.startsWith(q));
+  const t=q.split(/\s+/);
+  return ALARMS.filter(a=>{const s=(a.code+' '+a.name+' '+(a.desc_ko||'')+' '+(a.condition||'')+' '+a.category).toLowerCase();return t.every(w=>s.includes(w))});
+}
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+function actionLines(text){return String(text||'').split(/\n+/).map(s=>s.replace(/^\s*\d+\)\s*/,'').replace(/\s+/g,' ').trim()).filter(s=>s.length>1)}
+function topActions(rows,n){
+  const m={};for(const r of rows)for(const l of actionLines(r.a)){const k=l.replace(/\(\d+회\)/,'').trim();if(k.length<2)continue;m[k]=(m[k]||0)+1}
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n);
+}
+
+/* ---------- views ---------- */
+function render(){
+  if(!ALARMS.length)return;
+  document.querySelectorAll('[data-go]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.go===state.view||(state.view==='alarm'&&b.dataset.go==='home'&&false))));
+  if(state.view==='alarm'&&BY[state.code]) return renderAlarm(BY[state.code]);
+  if(state.view==='log') return renderLog();
+  if(state.view==='about') return renderAbout();
+  renderHome();
+}
+function rowHTML(a){
+  const n=(HBY[a.code]||[]).length+solFor(a.code).length;
+  return `<button class="row" data-code="${esc(a.code)}"><span class="code">${esc(a.code)}</span><span class="nm">${esc(a.name)}<small>${esc(a.category)} · ${esc(a.level)}</small></span><span class="cnt">${n?n+'건':''}</span></button>`;
+}
+function renderHome(){
+  const q=state.query;
+  if(q){
+    const r=searchAlarms(q);
+    main.innerHTML=`<section class="view"><div class="label">검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
+    return;
+  }
+  FREQ=FREQ||freq();
+  const top=Object.entries(FREQ).filter(([c])=>BY[c]).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const recent=SOL.slice(0,5);
+  main.innerHTML=`<section class="view">
+    <div class="card small">알람코드를 입력하면 <b>알람 의미 · 과거 조치이력 · 점검 순서 · 점검 위치 도면</b>을 한 화면에서 봅니다. 새로 찾은 해결법은 오른쪽 아래 <b>+ 조치 등록</b>으로 남기면 같은 코드 조회 시 맨 위에 표시됩니다.</div>
+    <div><div class="label">최근 등록한 조치</div>
+    ${recent.length?`<div class="hist" style="margin-top:6px">${recent.map(s=>solHTML(s,true)).join('')}</div>`:`<div class="empty" style="margin-top:6px">아직 등록한 조치가 없습니다. 오늘 해결한 알람이 있다면 <b>+ 조치 등록</b>으로 첫 기록을 남겨 보세요.</div>`}</div>
+    <div><div class="label">백수 U93 자주 발생한 알람 (2015–2024.02 일일운전보고)</div>
+    <div class="list" style="margin-top:6px">${top.map(([c])=>rowHTML(BY[c])).join('')}</div></div>
+  </section>`;
+}
+function solHTML(s,showCode){
+  const st={'해결':'ok','확인중':'chk','재발':'chk'}[s.result]||'new';
+  return `<div class="h mine"><div class="meta">${showCode?`<a href="#a${esc(s.code)}" class="mono" style="color:var(--steel);font-weight:700">${esc(s.code)}</a>`:''}<span>${esc(s.date||'')}</span><span>${esc(s.site||'')} ${s.wtg?'#'+esc(s.wtg):''}</span><span class="badge ${st}">${esc(s.result||'등록')}</span>${s.pinned?'<span class="badge ok">표준조치</span>':''}</div>
+  ${s.symptom?`<div class="small"><b>증상</b> ${esc(s.symptom)}</div>`:''}
+  ${s.cause?`<div class="small"><b>원인</b> ${esc(s.cause)}</div>`:''}
+  <div class="pre"><b class="small">조치</b> ${esc(s.action)}</div>
+  ${s.location?`<div class="small"><b>점검 위치·단자</b> ${esc(s.location)}</div>`:''}
+  ${s.parts?`<div class="small"><b>부품</b> ${esc(s.parts)}</div>`:''}
+  ${s.photo?`<div class="imgs" style="margin-top:6px"><figure><img src="/_blob/${esc(s.photo)}" alt="조치 사진" loading="lazy"></figure></div>`:''}
+  <div class="actions">${s.id?`<button class="del" data-pin="${esc(s.id)}">${s.pinned?'표준조치 해제':'표준조치로 지정'}</button><button class="del" data-delsol="${esc(s.id)}">삭제</button>`:''}</div></div>`;
+}
+function renderAlarm(a){
+  const hist=HBY[a.code]||[], sols=solFor(a.code).sort((p,q)=>(q.pinned?1:0)-(p.pinned?1:0));
+  const tabs=[['meaning','의미'],['act','조치'],['hist','이력 '+(hist.length+sols.length)],['draw','도면']];
+  let body='';
+  if(state.tab==='meaning'){
+    body=`<div class="card"><div class="label">발생 조건 (원문)</div><div class="pre mono small" style="margin-top:4px">${esc(a.condition||'—')}</div>
+    ${a.desc_ko?`<div class="label" style="margin-top:12px">한글 설명 (알람리스트 발췌)</div><div class="pre" style="margin-top:4px">${esc(a.desc_ko)}</div>`:''}
+    <p class="src" style="margin-top:12px">${a.src==='verified'?'<span class="badge ok">명칭 교차확인</span> ':'<span class="badge chk">원문 대조 필요</span> '}UNISON ALARM LIST for U88/U93 (UNS-U93(88)-S135K-000, 2016-09-26) p.${esc(a.page)}${a.src==='verified'?' · 조건/정지동작은 Trouble Shooting Manual(UNS-U88(93)-S502-000) 알람표에서 자동 추출 — 판단 전 원문 페이지 확인':' · 자동 추출이라 발생 조건 미기재 — 원문 확인 후 사용'}</p></div>
+    <div class="card"><div class="label">정지 시 동작</div>
+      <div class="facts" style="margin-top:6px">
+      <div class="fact"><span>Brake</span><b>${a.brake?esc(a.brake)+' · '+esc(BRAKE[a.brake]||''):'—'}</b></div>
+      <div class="fact"><span>Yaw</span><b>${a.yaw?esc(a.yaw)+' · '+esc(YAW[a.yaw]||''):'—'}</b></div>
+      <div class="fact"><span>Reset 방식</span><b>${esc(resetText(a.reset))}</b></div>
+      <div class="fact"><span>반복 알람 조건</span><b>${esc(a.repeat||'—')}</b></div></div></div>`;
+  }else if(state.tab==='act'){
+    const top=topActions(hist,8), max=top[0]?top[0][1]:1;
+    body=`<div class="note"><b>작업 전</b> 운전 정지 · 해당 회로 전원 차단(LOTO) · 허브/로터 작업 시 로터락 · 피치 배터리·DC link 등 잔류 에너지 확인. 보호회로 우회·근거 없는 파라미터 변경 금지.</div>
+    <div class="card"><div class="label">현장 등록 조치 ${sols.length}건</div>
+      ${sols.length?`<div class="hist" style="margin-top:6px">${sols.map(s=>solHTML(s)).join('')}</div>`:`<div class="empty" style="margin-top:6px">이 코드로 등록한 조치가 없습니다. 해결하면 <b>+ 조치 등록</b>으로 남겨 주세요.</div>`}</div>
+    <div class="card"><div class="label">백수 과거 조치 빈도 (${hist.length}건 중 상위)</div>
+      ${top.length?`<div class="bars" style="margin-top:8px">${top.map(([t,n])=>`<div class="bar"><div class="t"><i style="width:${(n/max*100).toFixed(0)}%"></i><span>${esc(t)}</span></div><div class="n">${n}</div></div>`).join('')}</div><p class="src" style="margin-top:8px">출처: 백수 U93 일일운전보고 Remarks 칸 · 상세는 이력 탭</p>`:'<div class="empty" style="margin-top:6px">일일운전보고에 이 코드의 조치 기록이 없습니다.</div>'}</div>
+    ${a.tsm?`<div class="card"><div class="label">Trouble Shooting Manual 절차</div><div class="pre small" style="margin-top:6px">${esc(a.tsm.steps.join('\n'))}</div>${a.tsm.remark?`<p class="small muted">${esc(a.tsm.remark)}</p>`:''}<p class="src">UNS-U88(93)-S502-000 · 관련도면 ${esc(a.tsm.docs.replace('REATED P. ',''))}<br><b>주의:</b> 단자번호(-X..)는 U88E(Nagashima) 도면 기준입니다. 백수/화순 U93 도면(U88U93.03.SC.Control System)과 대조 후 사용하세요.</p></div>`:''}
+    <div class="card"><div class="label">일반 점검 순서</div><ol class="steps" style="margin-top:8px">${guide(a).map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+      <p class="src" style="margin-top:8px">알람명 기반 일반 점검 가이드이며 유니슨 공식 절차가 아닙니다. 단자·정상값은 해당 도면/사양서로 확인하세요.</p></div>`;
+  }else if(state.tab==='hist'){
+    const wtgs=[...new Set(hist.map(r=>r.w))].sort((x,y)=>x-y);
+    const fw=state.wtg||'';
+    const rows=hist.filter(r=>!fw||String(r.w)===fw);
+    body=`${sols.length?`<div class="card"><div class="label">현장 등록 조치</div><div class="hist" style="margin-top:6px">${sols.map(s=>solHTML(s)).join('')}</div></div>`:''}
+    <div class="card"><div class="label">백수 일일운전보고 이력 ${hist.length}건</div>
+    ${wtgs.length>1?`<div class="nav" style="margin-top:8px"><button class="chip" data-wtg="" aria-pressed="${!fw}">전체</button>${wtgs.map(w=>`<button class="chip" data-wtg="${w}" aria-pressed="${fw===String(w)}">#${String(w).padStart(2,'0')}</button>`).join('')}</div>`:''}
+    ${rows.length?`<div class="hist" style="margin-top:10px">${rows.slice(0,150).map(r=>`<div class="h"><div class="meta"><span>${esc(r.d)}</span><span>#${String(r.w).padStart(2,'0')}</span>${r.c.length>1?`<span>동시: ${esc(r.c.filter(c=>c!==a.code).join(', '))}</span>`:''}${r.m?`<span>${esc(r.m.replace(/\n/g,' '))}</span>`:''}</div>${r.e?`<div class="small muted">${esc(r.e.replace(/\n/g,' / '))}</div>`:''}<div class="pre small">${esc(r.a)}</div>${r.p?`<div class="small"><b>부품</b> ${esc(r.p)}</div>`:''}</div>`).join('')}</div>${rows.length>150?'<p class="small muted">최근 150건만 표시</p>':''}`:'<div class="empty" style="margin-top:6px">기록 없음</div>'}
+    <p class="src" style="margin-top:8px">2018–2020년 파일은 용량 제한(10MB 초과)으로 아직 포함되지 않았습니다.</p></div>`;
+  }else{
+    const z=zonesFor(a), d=drwFor(a.code);
+    body=`<div class="card"><div class="label">점검 위치</div><p class="small" style="margin:4px 0 8px">${z.map(id=>esc(ZONES.find(x=>x.id===id).name)).join(' · ')||'—'} <span class="muted">(알람명 기준 추정)</span></p>
+      <div class="diagram">${diagramSVG(z)}</div>
+      <div class="legend" style="margin-top:6px"><span><i style="background:var(--zone-hi)"></i>점검 대상</span><span><i style="background:var(--zone)"></i>기타 구역</span></div></div>
+    <div class="card"><div class="label">실제 도면 · 사진 ${d.length}건</div>
+      ${d.length?`<div class="imgs" style="margin-top:8px">${d.map(x=>`<figure><a href="/_blob/${esc(x.asset)}" target="_blank" rel="noopener"><img src="/_blob/${esc(x.asset)}" alt="${esc(x.caption||'도면')}" loading="lazy"></a><figcaption>${esc(x.caption||'')}<br><button class="del" data-deldrw="${esc(x.id)}">삭제</button></figcaption></figure>`).join('')}</div>`:'<div class="empty" style="margin-top:8px">이 알람에 연결된 도면이 없습니다. 도면 페이지를 촬영하거나 캡처해서 올려 두면 다음부터 바로 봅니다.</div>'}
+      <form class="f" id="drwForm" style="margin-top:10px">
+        <label>도면/사진 파일<input id="drwFile" type="file" accept="image/*"></label>
+        <label>설명 (도면번호·페이지·개정판)<input id="drwCap" type="text" placeholder="예: U88U93.03.SC.Control System.00-E p.14 Rotor lock"></label>
+        <button class="btn primary" type="submit">도면 올리기</button>
+      </form>
+      <p class="src" style="margin-top:8px">관련 원문: <a href="https://drive.google.com/file/d/1lUGBS8vxck2dtar5fYG8DsRCam4hSz1u/view" target="_blank" rel="noopener">U88U93.03.SC.Control System.00-E(백수)</a> · <a href="https://drive.google.com/file/d/1g-P8E4hFWMT9YXSWX34tVGXncUDiTUVd/view" target="_blank" rel="noopener">ALARM LIST U88/U93</a> · <a href="https://drive.google.com/file/d/10pJofPdWySRUWQIi5CAQLs6mrgIXNcaz/view" target="_blank" rel="noopener">트러블슈팅.pdf</a></p></div>`;
+  }
+  main.innerHTML=`<section class="view">
+    <div class="card hero"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="big">${esc(a.code)}</span>${lvl(a)}</div>
+      <div class="title">${esc(a.name)}</div>
+      <div class="small muted">${esc(a.category)} · ${esc(a.type)}${a.reset?' · Reset '+esc(a.reset):''}</div></div>
+    <div class="tabs" role="tablist">${tabs.map(([k,t])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${state.tab===k}">${esc(t)}</button>`).join('')}</div>
+    ${body}</section>`;
+}
+function renderLog(){
+  main.innerHTML=`<section class="view"><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">등록된 조치 ${SOL.length}건</div><button class="btn" id="exportBtn" type="button">백업 파일 저장(JSON)</button></div>
+  ${SOL.length?`<div class="hist">${SOL.map(s=>solHTML(s,true)).join('')}</div>`:'<div class="empty">아직 등록한 조치가 없습니다.</div>'}</section>`;
+}
+function renderAbout(){
+  main.innerHTML=`<section class="view"><div class="card small"><div class="label">기본 데이터</div>
+  <ul>
+   <li>알람 ${ALARMS.length}개 — UNISON ALARM LIST for U88/U93 (UNS-U93(88)-S135K-000, Rev.0, 2016-09-26, 한글판). 그중 ${ALARMS.filter(a=>a.src==='verified').length}개는 Trouble Shooting Manual(UNS-U88(93)-S502-000, 2015-09-15) 알람표와 명칭이 일치해 발생 조건·정지 동작·Reset·반복조건을 함께 표시합니다. 나머지는 <span class="badge chk">원문 대조 필요</span>로 표시됩니다.</li>
+   <li>한글 설명은 PDF 텍스트 자동 추출 결과 중 알람명과 키워드가 맞는 것만 넣었습니다(${ALARMS.filter(a=>a.desc_ko).length}개). 판단 전 원문 페이지를 확인하세요.</li>
+   <li>과거 이력 ${HIST.length.toLocaleString()}건 — 백수 U93 일일운전보고 중 조치/부품 기록이 있는 날: ${SOURCES.map(esc).join(', ')}. 2018–2020년 원본은 10MB를 넘어 아직 넣지 못했습니다.</li>
+   <li>PCS(34xx) 알람은 U88E 매뉴얼과 U93 알람리스트의 내용이 달라, U93 알람리스트 명칭만 사용했습니다.</li>
+  </ul>
+  <div class="label">등록 데이터</div>
+  <p>+ 조치 등록, 도면 올리기로 남긴 내용은 ${db?'이 앱의 공유 저장소에 저장되어 같은 링크로 여는 다른 기기·팀원과 함께 봅니다.':'현재 이 기기 브라우저에만 저장됩니다. 등록된 조치 화면에서 백업 파일로 저장해 두세요.'}</p>
+  <p class="muted">알람 리스트 원문은 사내 Confidential 자료입니다. 링크 공유 범위에 유의하세요.</p></div></section>`;
+}
+
+/* ---------- registration sheet ---------- */
+function openForm(code){
+  const a=code&&BY[code];
+  const today=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
+  state.view='form';
+  document.querySelectorAll('[data-go]').forEach(b=>b.setAttribute('aria-pressed','false'));
+  main.innerHTML=`<section class="view"><div class="card"><h2>조치 등록</h2><p class="small muted" style="margin:4px 0 10px">확인된 사실만 적고, 추정은 원인 칸에 "추정"으로 표시하세요.</p>
+  <form class="f" id="solForm">
+    <div class="grid3">
+      <label>알람코드<input id="fCode" class="mono" inputmode="numeric" maxlength="4" required value="${esc(code||'')}"></label>
+      <label>현장<select id="fSite"><option>화순</option><option>백수</option><option>군산 MMB</option><option>기타</option></select></label>
+      <label>호기<input id="fWtg" inputmode="numeric" placeholder="예: 3"></label>
+    </div>
+    <div id="fName" class="small muted">${a?esc(a.name):''}</div>
+    <div class="grid2"><label>일자<input id="fDate" type="date" value="${today}"></label>
+      <label>결과<select id="fRes"><option>해결</option><option>확인중</option><option>재발</option></select></label></div>
+    <label>증상 (SCADA 값·동시 알람)<textarea id="fSym" placeholder="예: 운전 중 5013 발생, 피치 3번축 배터리 전압 저하 동시 표시"></textarea></label>
+    <label>원인<textarea id="fCause" placeholder="확인된 원인 / 추정이면 '추정' 표기"></textarea></label>
+    <label>조치 내용 (필수)<textarea id="fAct" required placeholder="점검 순서와 실제 조치, 리셋·재가동 조건"></textarea></label>
+    <label>점검 위치 · 단자 · 측정값<input id="fLoc" placeholder="예: 허브 Axis box 3, X3 단자 7-8, 24.1V (리셋 누른 상태)"></label>
+    <label>교체 부품 (품명 · 수량 · 교체 전/후 S/N)<input id="fParts"></label>
+    <label>사진 (선택)<input id="fPhoto" type="file" accept="image/*"></label>
+    <div class="actions"><button class="btn primary" type="submit">저장</button><button class="btn ghost" type="button" id="fCancel">취소</button></div>
+  </form></div></section>`;
+  $('#fCode').addEventListener('input',e=>{const x=BY[e.target.value.trim()];$('#fName').textContent=x?x.name:(e.target.value.length===4?'알람리스트에 없는 코드입니다. 코드를 다시 확인하세요.':'')});
+  $('#fCancel').onclick=()=>{state.view=code?'alarm':'home';render()};
+  $('#solForm').onsubmit=async e=>{
+    e.preventDefault();
+    const btn=e.submitter||e.target.querySelector('[type=submit]');btn.disabled=true;
+    const rec={code:$('#fCode').value.trim(),site:$('#fSite').value,wtg:$('#fWtg').value.trim(),date:$('#fDate').value,result:$('#fRes').value,
+      symptom:$('#fSym').value.trim(),cause:$('#fCause').value.trim(),action:$('#fAct').value.trim(),location:$('#fLoc').value.trim(),parts:$('#fParts').value.trim(),
+      pinned:false,createdAt:new Date().toISOString(),author:myId||''};
+    try{
+      const file=$('#fPhoto').files[0];
+      if(file){ if(assets){ const r=await assets.upload(await shrink(file)); rec.photo=r.id; } else toast('사진은 공유 저장소에서만 저장됩니다'); }
+      if(db){ await db.collection('solutions').add(rec); }
+      else { const o=lsGet(); rec.id='l'+Date.now(); o.sol.unshift(rec); lsSet(o); SOL=o.sol; }
+      toast('저장했습니다');
+      state.view='alarm';state.code=rec.code;state.tab='act';location.hash='a'+rec.code;render();
+    }catch(err){ toast('저장하지 못했습니다: '+(err&&err.code||err&&err.message||'오류')); btn.disabled=false; }
+  };
+  window.scrollTo(0,0);
+}
+async function shrink(file){
+  try{
+    const img=await createImageBitmap(file); const s=Math.min(1,1800/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(b=>r(b||file),'image/jpeg',.85));
+  }catch(e){return file}
+}
+
+/* ---------- events ---------- */
+$('#searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('#q').value.trim();if(BY[q]){go(q)}else{state.view='home';state.query=q;render()}});
+$('#q').addEventListener('input',e=>{const q=e.target.value.trim();if(BY[q])return;state.view='home';state.query=q;render()});
+$('#fab').addEventListener('click',()=>openForm(state.view==='alarm'?state.code:''));
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.go;state.query='';$('#q').value='';location.hash=b.dataset.go==='home'?'':b.dataset.go;render();window.scrollTo(0,0)}));
+main.addEventListener('click',async e=>{
+  const t=e.target.closest('button,a'); if(!t)return;
+  if(t.dataset.code){go(t.dataset.code);return}
+  if(t.dataset.tab){state.tab=t.dataset.tab;render();return}
+  if(t.dataset.wtg!==undefined){state.wtg=t.dataset.wtg;render();return}
+  if(t.id==='exportBtn'){
+    const data=JSON.stringify({exported:new Date().toISOString(),solutions:SOL,drawings:DRW},null,1);
+    if(downloads){try{await downloads.save({filename:'u93-alarm-notes-'+new Date().toISOString().slice(0,10)+'.json',data});toast('저장 요청을 보냈습니다')}catch(err){toast('저장이 취소되었거나 실패했습니다')}}
+    else{try{await navigator.clipboard.writeText(data);toast('백업 내용을 클립보드에 복사했습니다')}catch(err){toast('이 환경에서는 백업 저장을 지원하지 않습니다')}}
+    return;
+  }
+  if(t.dataset.pin){const s=SOL.find(x=>x.id===t.dataset.pin);if(!s)return;
+    if(db){try{await db.doc('solutions/'+s.id).update({pinned:!s.pinned})}catch(err){toast('변경 권한이 없습니다')}}
+    else{s.pinned=!s.pinned;const o=lsGet();o.sol=SOL;lsSet(o);render()}return}
+  if(t.dataset.delsol){ if(t.dataset.confirm!=='1'){t.dataset.confirm='1';t.textContent='한 번 더 누르면 삭제';return}
+    if(db){try{await db.doc('solutions/'+t.dataset.delsol).delete();toast('삭제했습니다')}catch(err){toast('삭제 권한이 없습니다')}}
+    else{const o=lsGet();o.sol=o.sol.filter(x=>x.id!==t.dataset.delsol);lsSet(o);SOL=o.sol;render()}return}
+  if(t.dataset.deldrw){ if(t.dataset.confirm!=='1'){t.dataset.confirm='1';t.textContent='한 번 더 누르면 삭제';return}
+    try{await db.doc('drawings/'+t.dataset.deldrw).delete();toast('삭제했습니다')}catch(err){toast('삭제 권한이 없습니다')}return}
+});
+main.addEventListener('submit',async e=>{
+  if(e.target.id!=='drwForm')return; e.preventDefault();
+  const f=$('#drwFile').files[0]; if(!f){toast('파일을 선택하세요');return}
+  if(!assets||!db){toast('도면 업로드는 공유 저장소가 연결된 화면에서만 됩니다');return}
+  try{const r=await assets.upload(await shrink(f));await db.collection('drawings').add({code:state.code,asset:r.id,caption:$('#drwCap').value.trim(),createdAt:new Date().toISOString(),author:myId||''});toast('도면을 올렸습니다')}
+  catch(err){toast('올리지 못했습니다: '+(err.code||err.message||'오류'))}
+});
+function go(code){state.view='alarm';state.code=code;state.tab='meaning';state.wtg='';location.hash='a'+code;render();window.scrollTo(0,0)}
+function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m&&BY[m[1]]){state.view='alarm';state.code=m[1];$('#q').value=m[1]}else if(h==='log'||h==='about')state.view=h;render()}
+window.addEventListener('hashchange',fromHash);
+
+loadStatic().then(()=>{fromHash();connect();});
+})();
+</script>
