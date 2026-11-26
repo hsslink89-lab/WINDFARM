@@ -109,6 +109,14 @@ form.f{display:grid;gap:10px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 80px);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:14px;z-index:9;max-width:90vw}
 .empty{padding:14px;text-align:center;color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:10px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
+.gstep{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.gstep:first-of-type{border-top:none;padding-top:0}
+.gstep h3{margin:0;font-size:15px;display:flex;gap:8px;align-items:baseline}
+.gstep h3 .no{font:700 13px var(--f-mono);color:var(--surface);background:var(--steel);border-radius:4px;padding:1px 7px}
+.gimg{display:block;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.gimg img{width:100%;height:auto;display:block}
+.codechips{display:flex;gap:6px;flex-wrap:wrap}
+.stepbox{display:grid;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px}
 .del{color:var(--crit);border-color:transparent;background:transparent;padding:2px 6px;font-size:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -141,7 +149,7 @@ form.f{display:grid;gap:10px}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const main=$('#main');
-let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[];
+let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[];
 let db=null,assets=null,user=null,downloads=null,myId=null;
 let state={view:'home',code:null,tab:'meaning',query:''};
 
@@ -242,6 +250,7 @@ async function connect(){
   try{ myId=user?await user.id():null; }catch(e){}
   db.collection('solutions').orderBy('createdAt','desc').onSnapshot(s=>{SOL=s.docs.map(d=>({id:d.id,...d.data()}));setSync('공유 저장소 연결됨 · 등록 '+SOL.length+'건');render();},e=>setSync('공유 저장소 오류: '+e.code));
   db.collection('drawings').orderBy('createdAt','desc').onSnapshot(s=>{DRW=s.docs.map(d=>({id:d.id,...d.data()}));render();},()=>{});
+  db.collection('guides').orderBy('createdAt','desc').onSnapshot(s=>{GUIDES=s.docs.map(d=>({id:d.id,...d.data()}));if(state.view!=='gform'&&state.view!=='form')render();},()=>{});
 }
 function localMode(){ if(db)return; const o=lsGet(); SOL=o.sol;DRW=o.drw; setSync('이 기기에만 저장 (오프라인 모드)'); render(); }
 function setSync(t){$('#sync').textContent=t}
@@ -250,6 +259,16 @@ function setSync(t){$('#sync').textContent=t}
 function lvl(a){const w=a.code[0]==='1';return `<span class="lv ${w?'w':'e'}">${esc(a.level||'')}</span>`}
 function solFor(code){return SOL.filter(s=>s.code===code)}
 function drwFor(code){return DRW.filter(s=>s.code===code)}
+function guidesFor(code){return GUIDES.filter(g=>(g.codes||[]).includes(code))}
+function getAlarm(code){
+  if(BY[code])return BY[code];
+  if(/^\d{4}$/.test(code)&&(guidesFor(code).length||solFor(code).length||drwFor(code).length))
+    return {code,level:'',category:'알람리스트 미등재',type:'',page:'',name:'U88/U93 알람리스트에 없는 코드',condition:'',brake:'',yaw:'',reset:'',repeat:'',desc_ko:'',src:'none'};
+  return null;
+}
+function searchGuides(q){q=q.trim().toLowerCase();if(!q)return [];const t=q.split(/\s+/);
+  return GUIDES.filter(g=>{const s=[g.title,g.intro,(g.codes||[]).join(' '),...(g.steps||[]).map(x=>x.title+' '+x.text)].join(' ').toLowerCase();return t.every(w=>s.includes(w))})}
+function guideCard(g){return `<button class="row" data-guide="${esc(g.id)}" style="grid-template-columns:64px 1fr auto"><span class="code" style="font-size:13px">계통도</span><span class="nm">${esc(g.title)}<small>${esc((g.codes||[]).join(', '))} · ${(g.steps||[]).length}장</small></span><span class="cnt">보기</span></button>`}
 function freq(){const m={};for(const r of HIST)for(const c of r.c)m[c]=(m[c]||0)+1;return m}
 let FREQ=null;
 function searchAlarms(q){
@@ -269,7 +288,8 @@ function topActions(rows,n){
 function render(){
   if(!ALARMS.length)return;
   document.querySelectorAll('[data-go]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.go===state.view||(state.view==='alarm'&&b.dataset.go==='home'&&false))));
-  if(state.view==='alarm'&&BY[state.code]) return renderAlarm(BY[state.code]);
+  if(state.view==='guide'){const g=GUIDES.find(x=>x.id===state.gid);if(g)return renderGuide(g);}
+  if(state.view==='alarm'&&getAlarm(state.code)) return renderAlarm(getAlarm(state.code));
   if(state.view==='log') return renderLog();
   if(state.view==='about') return renderAbout();
   renderHome();
@@ -281,8 +301,9 @@ function rowHTML(a){
 function renderHome(){
   const q=state.query;
   if(q){
-    const r=searchAlarms(q);
-    main.innerHTML=`<section class="view"><div class="label">검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
+    const r=searchAlarms(q), gs=searchGuides(q), x=getAlarm(q.trim());
+    if(x&&!BY[q.trim()]) r.unshift(x);
+    main.innerHTML=`<section class="view">${gs.length?`<div class="label">계통도 가이드 ${gs.length}건</div><div class="list">${gs.map(guideCard).join('')}</div>`:''}<div class="label">알람 검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
     return;
   }
   FREQ=FREQ||freq();
@@ -292,6 +313,8 @@ function renderHome(){
     <div class="card small">알람코드를 입력하면 <b>알람 의미 · 과거 조치이력 · 점검 순서 · 점검 위치 도면</b>을 한 화면에서 봅니다. 새로 찾은 해결법은 오른쪽 아래 <b>+ 조치 등록</b>으로 남기면 같은 코드 조회 시 맨 위에 표시됩니다.</div>
     <div><div class="label">최근 등록한 조치</div>
     ${recent.length?`<div class="hist" style="margin-top:6px">${recent.map(s=>solHTML(s,true)).join('')}</div>`:`<div class="empty" style="margin-top:6px">아직 등록한 조치가 없습니다. 오늘 해결한 알람이 있다면 <b>+ 조치 등록</b>으로 첫 기록을 남겨 보세요.</div>`}</div>
+    <div><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">계통도 가이드 ${GUIDES.length}건</div><button class="btn" type="button" data-newguide="1">+ 가이드 만들기</button></div>
+    ${GUIDES.length?`<div class="list" style="margin-top:6px">${GUIDES.slice(0,6).map(guideCard).join('')}</div>`:`<div class="empty" style="margin-top:6px">${db?'도면 캡처에 설명을 붙인 계통도 가이드가 아직 없습니다.':'계통도 가이드는 공유 저장소가 연결된 화면에서 보입니다.'}</div>`}</div>
     <div><div class="label">백수 U93 자주 발생한 알람 (2015–2024.02 일일운전보고)</div>
     <div class="list" style="margin-top:6px">${top.map(([c])=>rowHTML(BY[c])).join('')}</div></div>
   </section>`;
@@ -314,7 +337,7 @@ function renderAlarm(a){
   if(state.tab==='meaning'){
     body=`<div class="card"><div class="label">발생 조건 (원문)</div><div class="pre mono small" style="margin-top:4px">${esc(a.condition||'—')}</div>
     ${a.desc_ko?`<div class="label" style="margin-top:12px">한글 설명 (알람리스트 발췌)</div><div class="pre" style="margin-top:4px">${esc(a.desc_ko)}</div>`:''}
-    <p class="src" style="margin-top:12px">${a.src==='verified'?'<span class="badge ok">명칭 교차확인</span> ':'<span class="badge chk">원문 대조 필요</span> '}UNISON ALARM LIST for U88/U93 (UNS-U93(88)-S135K-000, 2016-09-26) p.${esc(a.page)}${a.src==='verified'?' · 조건/정지동작은 Trouble Shooting Manual(UNS-U88(93)-S502-000) 알람표에서 자동 추출 — 판단 전 원문 페이지 확인':' · 자동 추출이라 발생 조건 미기재 — 원문 확인 후 사용'}</p></div>
+    ${a.src==='none'?'<p class="note" style="margin-top:12px">U88/U93 알람리스트(UNS-U93(88)-S135K-000)에 없는 코드입니다. 다른 기종 알람이거나 PCS(ABB) 자체 고장코드일 수 있으니 출처를 확인하세요. 등록된 조치·계통도는 아래 탭에서 봅니다.</p>':`<p class="src" style="margin-top:12px">${a.src==='verified'?'<span class="badge ok">명칭 교차확인</span> ':'<span class="badge chk">원문 대조 필요</span> '}UNISON ALARM LIST for U88/U93 (UNS-U93(88)-S135K-000, 2016-09-26) p.${esc(a.page)}${a.src==='verified'?' · 조건/정지동작은 Trouble Shooting Manual(UNS-U88(93)-S502-000) 알람표에서 자동 추출 — 판단 전 원문 페이지 확인':' · 자동 추출이라 발생 조건 미기재 — 원문 확인 후 사용'}</p>`}</div>
     <div class="card"><div class="label">정지 시 동작</div>
       <div class="facts" style="margin-top:6px">
       <div class="fact"><span>Brake</span><b>${a.brake?esc(a.brake)+' · '+esc(BRAKE[a.brake]||''):'—'}</b></div>
@@ -323,7 +346,8 @@ function renderAlarm(a){
       <div class="fact"><span>반복 알람 조건</span><b>${esc(a.repeat||'—')}</b></div></div></div>`;
   }else if(state.tab==='act'){
     const top=topActions(hist,8), max=top[0]?top[0][1]:1;
-    body=`<div class="note"><b>작업 전</b> 운전 정지 · 해당 회로 전원 차단(LOTO) · 허브/로터 작업 시 로터락 · 피치 배터리·DC link 등 잔류 에너지 확인. 보호회로 우회·근거 없는 파라미터 변경 금지.</div>
+    const gl=guidesFor(a.code);
+    body=`${gl.length?`<div class="card"><div class="label">먼저 볼 계통도</div><div class="list" style="margin-top:6px">${gl.map(guideCard).join('')}</div></div>`:''}<div class="note"><b>작업 전</b> 운전 정지 · 해당 회로 전원 차단(LOTO) · 허브/로터 작업 시 로터락 · 피치 배터리·DC link 등 잔류 에너지 확인. 보호회로 우회·근거 없는 파라미터 변경 금지.</div>
     <div class="card"><div class="label">현장 등록 조치 ${sols.length}건</div>
       ${sols.length?`<div class="hist" style="margin-top:6px">${sols.map(s=>solHTML(s)).join('')}</div>`:`<div class="empty" style="margin-top:6px">이 코드로 등록한 조치가 없습니다. 해결하면 <b>+ 조치 등록</b>으로 남겨 주세요.</div>`}</div>
     <div class="card"><div class="label">백수 과거 조치 빈도 (${hist.length}건 중 상위)</div>
@@ -341,8 +365,10 @@ function renderAlarm(a){
     ${rows.length?`<div class="hist" style="margin-top:10px">${rows.slice(0,150).map(r=>`<div class="h"><div class="meta"><span>${esc(r.d)}</span><span>#${String(r.w).padStart(2,'0')}</span>${r.c.length>1?`<span>동시: ${esc(r.c.filter(c=>c!==a.code).join(', '))}</span>`:''}${r.m?`<span>${esc(r.m.replace(/\n/g,' '))}</span>`:''}</div>${r.e?`<div class="small muted">${esc(r.e.replace(/\n/g,' / '))}</div>`:''}<div class="pre small">${esc(r.a)}</div>${r.p?`<div class="small"><b>부품</b> ${esc(r.p)}</div>`:''}</div>`).join('')}</div>${rows.length>150?'<p class="small muted">최근 150건만 표시</p>':''}`:'<div class="empty" style="margin-top:6px">기록 없음</div>'}
     <p class="src" style="margin-top:8px">2018–2020년 파일은 용량 제한(10MB 초과)으로 아직 포함되지 않았습니다.</p></div>`;
   }else{
-    const z=zonesFor(a), d=drwFor(a.code);
-    body=`<div class="card"><div class="label">점검 위치</div><p class="small" style="margin:4px 0 8px">${z.map(id=>esc(ZONES.find(x=>x.id===id).name)).join(' · ')||'—'} <span class="muted">(알람명 기준 추정)</span></p>
+    const z=zonesFor(a), d=drwFor(a.code), gl=guidesFor(a.code);
+    body=`<div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">계통도 가이드 ${gl.length}건</div><button class="btn" type="button" data-newguide="${esc(a.code)}">+ 가이드 만들기</button></div>
+      ${gl.length?`<div class="list" style="margin-top:8px">${gl.map(guideCard).join('')}</div>`:'<div class="empty" style="margin-top:8px">이 코드에 연결된 계통도 가이드가 없습니다. 도면 캡처에 경로·부품 설명을 붙여 만들어 두면 조회할 때 바로 봅니다.</div>'}</div>
+    <div class="card"><div class="label">점검 위치</div><p class="small" style="margin:4px 0 8px">${z.map(id=>esc(ZONES.find(x=>x.id===id).name)).join(' · ')||'—'} <span class="muted">(알람명 기준 추정)</span></p>
       <div class="diagram">${diagramSVG(z)}</div>
       <div class="legend" style="margin-top:6px"><span><i style="background:var(--zone-hi)"></i>점검 대상</span><span><i style="background:var(--zone)"></i>기타 구역</span></div></div>
     <div class="card"><div class="label">실제 도면 · 사진 ${d.length}건</div>
@@ -360,6 +386,46 @@ function renderAlarm(a){
       <div class="small muted">${esc(a.category)} · ${esc(a.type)}${a.reset?' · Reset '+esc(a.reset):''}</div></div>
     <div class="tabs" role="tablist">${tabs.map(([k,t])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${state.tab===k}">${esc(t)}</button>`).join('')}</div>
     ${body}</section>`;
+}
+function renderGuide(g){
+  const steps=g.steps||[];
+  main.innerHTML=`<section class="view">
+   <div class="card hero"><div class="label">계통도 가이드</div><div class="title">${esc(g.title)}</div>
+    <div class="codechips">${(g.codes||[]).map(c=>`<button class="chip" data-code="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    ${g.intro?`<div class="pre small">${esc(g.intro)}</div>`:''}</div>
+   <div class="card" style="display:grid;gap:14px">${steps.map((st,i)=>`<div class="gstep"><h3><span class="no">${i+1}</span>${esc(st.title||'')}</h3>
+     ${st.asset?`<a class="gimg" href="/_blob/${esc(st.asset)}" target="_blank" rel="noopener"><img src="/_blob/${esc(st.asset)}" alt="${esc(st.title||'도면')}" loading="lazy"></a><div class="small muted">도면을 누르면 원본 크기로 열려 확대해 볼 수 있습니다.</div>`:''}
+     ${st.text?`<div class="pre small">${esc(st.text)}</div>`:''}</div>`).join('')}</div>
+   ${g.source?`<p class="src">${esc(g.source)}</p>`:''}
+   <div class="card"><form class="f" id="gCodesForm"><label>연결 알람코드 (쉼표로 구분)<input id="gCodes" class="mono" value="${esc((g.codes||[]).join(', '))}"></label>
+    <div class="actions"><button class="btn" type="submit">코드 저장</button><button class="del" type="button" data-delguide="${esc(g.id)}">가이드 삭제</button></div></form></div>
+  </section>`;
+}
+function openGuideForm(code){
+  state.view='gform';
+  document.querySelectorAll('[data-go]').forEach(b=>b.setAttribute('aria-pressed','false'));
+  if(!db||!assets){main.innerHTML='<section class="view"><div class="empty">계통도 가이드는 공유 저장소와 파일 업로드가 연결된 화면에서만 만들 수 있습니다.</div></section>';return}
+  const stepHTML=n=>`<div class="stepbox" data-step="${n}"><b class="small">${n}번째 도면</b><label>도면 이미지<input type="file" accept="image/*" class="sFile"></label><label>제목<input class="sTitle" placeholder="예: Sheet 02 — 충전 전원측"></label><label>설명 (경로·부품·점검 포인트)<textarea class="sText" placeholder="예: Q10 퓨즈스위치 → K2 충전MC → R1 충전저항 → F9.1/F9.2 → Q1 하류 합류"></textarea></label></div>`;
+  main.innerHTML=`<section class="view"><div class="card"><h2>계통도 가이드 만들기</h2><p class="small muted" style="margin:4px 0 10px">도면 캡처 여러 장을 순서대로 올리고 장마다 설명을 붙입니다. 도면번호·시트·개정판을 출처에 적어 주세요.</p>
+   <form class="f" id="gForm"><label>제목<input id="gTitle" required placeholder="예: PCS 충전회로 → DC 링크 계통"></label>
+   <label>연결 알람코드 (쉼표로 구분)<input id="gNewCodes" class="mono" value="${esc(code||'')}" placeholder="예: 3423, 3424"></label>
+   <label>개요<textarea id="gIntro"></textarea></label>
+   <label>출처 (도면번호·시트·Rev)<input id="gSrc"></label>
+   <div id="gSteps" style="display:grid;gap:10px">${stepHTML(1)}</div>
+   <button class="btn" type="button" id="gAdd">+ 도면 추가</button>
+   <div class="actions"><button class="btn primary" type="submit">저장</button><button class="btn ghost" type="button" id="gCancel">취소</button></div></form></div></section>`;
+  let n=1;
+  $('#gAdd').onclick=()=>{n++;$('#gSteps').insertAdjacentHTML('beforeend',stepHTML(n))};
+  $('#gCancel').onclick=()=>{state.view=code?'alarm':'home';render()};
+  $('#gForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('[type=submit]');btn.disabled=true;btn.textContent='올리는 중…';
+    try{const steps=[];
+      for(const box of document.querySelectorAll('#gSteps .stepbox')){const f=box.querySelector('.sFile').files[0];const t=box.querySelector('.sTitle').value.trim();const x=box.querySelector('.sText').value.trim();
+        if(!f&&!t&&!x)continue; let asset=''; if(f){asset=(await assets.upload(await shrink(f,2600))).id} steps.push({asset,title:t,text:x});}
+      if(!steps.length){toast('도면을 한 장 이상 넣어 주세요');btn.disabled=false;btn.textContent='저장';return}
+      const ref=await db.collection('guides').add({title:$('#gTitle').value.trim(),codes:$('#gNewCodes').value.split(/[\s,]+/).filter(Boolean),intro:$('#gIntro').value.trim(),source:$('#gSrc').value.trim(),steps,createdAt:new Date().toISOString(),author:myId||''});
+      toast('가이드를 저장했습니다');state.view='guide';state.gid=ref.id;location.hash='g'+ref.id;render();
+    }catch(err){toast('저장하지 못했습니다: '+(err.code||err.message||'오류'));btn.disabled=false;btn.textContent='저장'}};
+  window.scrollTo(0,0);
 }
 function renderLog(){
   main.innerHTML=`<section class="view"><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">등록된 조치 ${SOL.length}건</div><button class="btn" id="exportBtn" type="button">백업 파일 저장(JSON)</button></div>
@@ -421,9 +487,9 @@ function openForm(code){
   };
   window.scrollTo(0,0);
 }
-async function shrink(file){
+async function shrink(file,max){
   try{
-    const img=await createImageBitmap(file); const s=Math.min(1,1800/Math.max(img.width,img.height));
+    const img=await createImageBitmap(file); const s=Math.min(1,(max||1800)/Math.max(img.width,img.height));
     const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height);
     return await new Promise(r=>c.toBlob(b=>r(b||file),'image/jpeg',.85));
@@ -431,13 +497,17 @@ async function shrink(file){
 }
 
 /* ---------- events ---------- */
-$('#searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('#q').value.trim();if(BY[q]){go(q)}else{state.view='home';state.query=q;render()}});
+$('#searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('#q').value.trim();if(getAlarm(q)){go(q)}else{state.view='home';state.query=q;render()}});
 $('#q').addEventListener('input',e=>{const q=e.target.value.trim();if(BY[q])return;state.view='home';state.query=q;render()});
 $('#fab').addEventListener('click',()=>openForm(state.view==='alarm'?state.code:''));
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.go;state.query='';$('#q').value='';location.hash=b.dataset.go==='home'?'':b.dataset.go;render();window.scrollTo(0,0)}));
 main.addEventListener('click',async e=>{
   const t=e.target.closest('button,a'); if(!t)return;
   if(t.dataset.code){go(t.dataset.code);return}
+  if(t.dataset.guide){state.view='guide';state.gid=t.dataset.guide;location.hash=/^[A-Za-z0-9-]+$/.test(t.dataset.guide)?'g'+t.dataset.guide:'';render();window.scrollTo(0,0);return}
+  if(t.dataset.newguide!==undefined){openGuideForm(t.dataset.newguide==='1'?'':t.dataset.newguide);return}
+  if(t.dataset.delguide){ if(t.dataset.confirm!=='1'){t.dataset.confirm='1';t.textContent='한 번 더 누르면 삭제';return}
+    try{await db.doc('guides/'+t.dataset.delguide).delete();toast('삭제했습니다');state.view='home';location.hash='';render()}catch(err){toast('삭제 권한이 없습니다')}return}
   if(t.dataset.tab){state.tab=t.dataset.tab;render();return}
   if(t.dataset.wtg!==undefined){state.wtg=t.dataset.wtg;render();return}
   if(t.id==='exportBtn'){
@@ -456,6 +526,8 @@ main.addEventListener('click',async e=>{
     try{await db.doc('drawings/'+t.dataset.deldrw).delete();toast('삭제했습니다')}catch(err){toast('삭제 권한이 없습니다')}return}
 });
 main.addEventListener('submit',async e=>{
+  if(e.target.id==='gCodesForm'){e.preventDefault();const codes=$('#gCodes').value.split(/[\s,]+/).filter(Boolean);
+    try{await db.doc('guides/'+state.gid).update({codes});toast('연결 코드를 저장했습니다')}catch(err){toast('저장하지 못했습니다')}return}
   if(e.target.id!=='drwForm')return; e.preventDefault();
   const f=$('#drwFile').files[0]; if(!f){toast('파일을 선택하세요');return}
   if(!assets||!db){toast('도면 업로드는 공유 저장소가 연결된 화면에서만 됩니다');return}
@@ -463,7 +535,7 @@ main.addEventListener('submit',async e=>{
   catch(err){toast('올리지 못했습니다: '+(err.code||err.message||'오류'))}
 });
 function go(code){state.view='alarm';state.code=code;state.tab='meaning';state.wtg='';location.hash='a'+code;render();window.scrollTo(0,0)}
-function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m&&BY[m[1]]){state.view='alarm';state.code=m[1];$('#q').value=m[1]}else if(h==='log'||h==='about')state.view=h;render()}
+function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){state.view='alarm';state.code=m[1];$('#q').value=m[1]}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about')state.view=h;render()}
 window.addEventListener('hashchange',fromHash);
 
 loadStatic().then(()=>{fromHash();connect();});
