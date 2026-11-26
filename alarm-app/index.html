@@ -233,7 +233,8 @@ function guide(a){
 async function loadStatic(){
   try{
     const [a,h,s]=await Promise.all([fetch('data/alarms.json').then(r=>r.json()),fetch('data/history.json').then(r=>r.json()),fetch('data/sources.json').then(r=>r.json()).catch(()=>[])]);
-    try{INV=await fetch('data/inventory.json').then(r=>r.json())}catch(e){}
+    // 재고(data/inventory.json)는 최신화 전이라 표시 중단 (2026-11-26 사용자 요청). 다시 쓰려면 아래 줄 주석 해제
+    // try{INV=await fetch('data/inventory.json').then(r=>r.json())}catch(e){}
     try{SYS=await fetch('data/sysguides.json').then(r=>r.json());for(const g of SYS)SYSBY[g.id]=g}catch(e){}
     ALARMS=a;HIST=h;SOURCES=s;
     for(const x of ALARMS)BY[x.code]=x;
