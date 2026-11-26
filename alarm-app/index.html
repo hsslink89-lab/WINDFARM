@@ -329,12 +329,23 @@ function partItems(r){
   for(const l of actionLines(r.a)){if(/교체/.test(l)&&!/교체\s*예정|교체예정|교체\s*필요|교체\s*요망|교체\s*검토/.test(l))out.push({name:l,kind:'act'})}
   return out;
 }
-const KO2EN=[[/퓨즈/g,'fuse'],[/모듈/g,'module'],[/스택/g,'stack'],[/배터리/g,'battery'],[/엔코더|인코더/g,'encoder'],[/레졸버|리졸버|레졸브/g,'resolver'],[/케이블/g,'cable'],[/팬/g,'fan'],[/필터/g,'filter'],[/릴레이/g,'relay'],[/센서/g,'sensor'],[/모터/g,'motor'],[/충전기|차저/g,'charger'],[/피치마스터/g,'pitchmaster'],[/슬립링/g,'slipring'],[/보드/g,'board'],[/스위치/g,'switch'],[/그리스/g,'grease'],[/오일/g,'oil'],[/브레이크/g,'brake'],[/히터/g,'heater'],[/피치/g,'pitch'],[/아트라스/g,'atlas']];
+const KO2EN=[[/퓨즈/g,'fuse'],[/모듈/g,'module'],[/스택/g,'stack'],[/배터리/g,'battery'],[/엔코더|인코더/g,'encoder'],[/레졸버|리졸버|레졸브/g,'resolver'],[/케이블/g,'cable'],[/팬/g,'fan'],[/필터/g,'filter'],[/릴레이/g,'relay'],[/센서/g,'sensor'],[/모터/g,'motor'],[/펜/g,'fan'],[/충전기|차저/g,'charger'],[/피치마스터/g,'pitchmaster'],[/슬립링/g,'slipring'],[/보드/g,'board'],[/스위치/g,'switch'],[/그리스/g,'grease'],[/오일/g,'oil'],[/브레이크/g,'brake'],[/히터/g,'heater'],[/피치/g,'pitch'],[/아트라스/g,'atlas']];
+// 같은 부품의 다른 표기 합침 (사용자 결정 2026-11-26: 'PCS DC fuse'='DC 퓨즈' 등)
+const PART_ALIAS=[[/^(pcs|isu|isustack|lsc)?dcfuse$/,'dcfuse'],[/^(pcs|isu|isustack|lsc)?acfuse$/,'acfuse'],
+ [/^(pcs)?igbt(module)?fan$/,'igbtmodulefan'],[/^(pitch)?motor(cooling)?fan$/,'pitchmotorfan'],
+ [/^(?!.*charger)(pitchbattery|battery|batter[a-z]*chassis|atlas|altas)(atlas|altas|cell|chassis|pitchbattery|2014)*$/,'pitchbattery'],
+ [/^(atlas|altas)(cell|batter[a-z]*chassis)?$/,'pitchbattery'],[/^batterycha(r)?ger(14g1)?$/,'batterycharger'],
+ [/^aint(module|24c?)?$/,'aint'],[/^(moble)?xmp320/,'xmp320'],[/^excel32dte10/,'excel32dte10'],
+ [/^(pitchmotor)?encoder(resolver)?$|^resolver$/,'encoderresolver'],[/^slipring$/,'slipring'],
+ [/^light(h)?ningprotection/,'lightningprotection'],[/^maintr(temp)?controller$/,'maintrtempcontroller'],[/^6g2$/,'6g2']];
 function partKey(n){
   let t=String(n).toLowerCase();
   for(const [re,en] of KO2EN)t=t.replace(re,en);
-  t=t.replace(/\(?\s*\d+\s*(ea|개|pcs|set|본|매)\s*\)?/g,' ').replace(/\b(sp|ps|pc|el|cl|gb|al)-?\d{2,4}\b/g,' ').replace(/교체|신품|새제품|수리품|정품/g,' ');
-  return t.replace(/[^a-z0-9가-힣]/g,'');
+  t=t.replace(/\(?\s*\d+\s*(ea|개|pcs|set|본|매)\s*\)?/g,' ').replace(/\b(sp|ps|pc|el|cl|gb|al)-?\d{2,4}(?![0-9])/g,' ').replace(/교체|신품|새제품|수리품|정품|회수품|재고품|창고|국산|제품|베어링|panasonic|유니슨|백수|\d+\s*호기/g,' ');
+  t=t.replace(/[^a-z0-9가-힣]/g,'');
+  if(/cable/.test(t))t='cable'+t.replace(/cable/g,'');
+  for(const [re,k] of PART_ALIAS)if(re.test(t))return k;
+  return t;
 }
 const INVKW=[[/pitchmaster/,[26,27]],[/acfuse/,[14]],[/igbtmodulefan|igbtfan|modulefan/,[13]],[/encoder|resolver/,[19]],[/charger|changer/,[21]],[/slipring/,[20]],[/pressureswitch/,[22]],[/motorfan/,[23]],[/pitchmotor/,[24]],[/limitswitch/,[15]],[/c2w|c2\/w/,[25]],[/s1w|s1\/w/,[18]],[/thermovalve/,[17]],[/distributor/,[16]],[/gbfilter|g\/bfilter|pressurefilter/,[10,11,12]]];
 function invFor(key){if(!INV)return [];for(const [re,nos] of INVKW)if(re.test(key))return INV.items.filter(x=>nos.includes(x.no));return []}
@@ -369,7 +380,7 @@ function renderParts(){
    <form class="f" id="pForm"><input id="pq" placeholder="부품명 검색 (예: fuse, encoder, AINT)" value="${esc(state.pq||'')}"></form>
    <div class="card" style="overflow-x:auto"><table class="ptab"><thead><tr><th>부품</th><th>횟수</th><th>최근</th><th>같은 날 알람</th></tr></thead><tbody>
    ${list.slice(0,300).map(o=>`<tr><td><b>${esc(o.name)}</b>${o.alt.length?`<div class="small muted">다른 표기 ${o.alt.length}: ${esc(o.alt.slice(0,4).join(' / '))}${o.alt.length>4?' …':''}</div>`:''}${o.inv?`<div class="small" style="color:var(--ok)">재고: ${esc(o.inv)}</div>`:''}</td><td class="mono">${o.n}</td><td class="mono" style="white-space:nowrap">${esc(o.last.slice(2).replace(/-/g,'.'))}</td><td class="mono small">${Object.entries(o.codes).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c])=>`<a href="#a${esc(c)}" style="color:var(--steel);margin-right:6px">${esc(c)}</a>`).join('')}</td></tr>`).join('')}
-   </tbody></table></div><p class="src">교체부품 칸을 줄 단위로 집계했습니다(S/N 줄 제외). 대소문자·띄어쓰기·수량(2ea 등)·한/영 표기(퓨즈=fuse 등)가 달라도 같은 글자면 하나로 합쳤고, '같은 날 알람'은 그날 함께 기록된 알람이라 직접 원인이 아닐 수 있습니다.</p></section>`;
+   </tbody></table></div><p class="src">교체부품 칸을 줄 단위로 집계했습니다(S/N 줄 제외). 대소문자·띄어쓰기·수량(2ea 등)·한/영 표기(퓨즈=fuse 등)가 달라도 같은 글자면 하나로 합쳤고, 위치·출처만 다른 같은 부품(PCS DC fuse=DC 퓨즈, 피치 배터리=Atlas=Battery chassis, IGBT fan=IGBT module fan, AINT=AINT-24C 등)도 합쳤습니다. '같은 날 알람'은 그날 함께 기록된 알람이라 직접 원인이 아닐 수 있습니다.</p></section>`;
   const f=$('#pForm');f.onsubmit=e=>{e.preventDefault();state.pq=$('#pq').value.trim();renderParts()};
 }
 function topActions(rows,n){
