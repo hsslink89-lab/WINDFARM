@@ -117,6 +117,8 @@ form.f{display:grid;gap:10px}
 .gimg img{width:100%;height:auto;display:block}
 .codechips{display:flex;gap:6px;flex-wrap:wrap}
 .stepbox{display:grid;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px}
+.ptab{width:100%;border-collapse:collapse;font-size:13px}.ptab th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);padding:4px 6px}.ptab td{border-bottom:1px solid var(--line);padding:6px;vertical-align:top;overflow-wrap:anywhere}
+details summary{cursor:pointer}
 .del{color:var(--crit);border-color:transparent;background:transparent;padding:2px 6px;font-size:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -134,6 +136,7 @@ form.f{display:grid;gap:10px}
     <nav class="nav" aria-label="화면">
       <button class="chip" data-go="home" aria-pressed="true">홈</button>
       <button class="chip" data-go="log" aria-pressed="false">등록된 조치</button>
+      <button class="chip" data-go="parts" aria-pressed="false">부품</button>
       <button class="chip" data-go="about" aria-pressed="false">자료 출처</button>
     </nav>
   </header>
@@ -310,6 +313,43 @@ function searchAlarms(q){
 }
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
 function actionLines(text){return String(text||'').split(/\n+/).map(s=>s.replace(/^\s*\d+\)\s*/,'').replace(/\s+/g,' ').trim()).filter(s=>s.length>1)}
+function partItems(r){
+  // 교체부품 칸 + 조치내용 중 '교체' 줄 (교체예정 제외)
+  const out=[];
+  for(const x of String(r.p||'').split(/\n+|\s\/\s/)){const t=x.replace(/^\s*\d+\)\s*/,'').trim();if(t.length>1)out.push({name:t,kind:'col'})}
+  for(const l of actionLines(r.a)){if(/교체/.test(l)&&!/교체\s*예정|교체예정|교체\s*필요|교체\s*요망|교체\s*검토/.test(l))out.push({name:l,kind:'act'})}
+  return out;
+}
+function partKey(n){return n.toLowerCase().replace(/\s+/g,' ').replace(/\(?\d+\s*ea\)?/g,'').trim()}
+function partsSummary(rows){
+  const col={},act=[];
+  for(const r of rows)for(const it of partItems(r)){
+    if(it.kind==='col'){const k=partKey(it.name);const o=col[k]||(col[k]={name:it.name,n:0,last:'',wtgs:new Set()});o.n++;if(r.d>o.last)o.last=r.d;o.wtgs.add(r.w)}
+    else act.push({d:r.d,w:r.w,t:it.name,multi:r.c.length>1});
+  }
+  return {col:Object.values(col).sort((a,b)=>b.n-a.n||b.last.localeCompare(a.last)),act:act.sort((a,b)=>b.d.localeCompare(a.d))};
+}
+function partsCard(a,hist){
+  const ps=partsSummary(hist), sols=solFor(a.code).filter(s=>s.parts);
+  if(!ps.col.length&&!ps.act.length&&!sols.length)return `<div class="card"><div class="label">사용 부품 (스페어 참고)</div><p class="small muted" style="margin:6px 0 0">일일운전보고에 이 코드의 부품 교체 기록이 없습니다.</p></div>`;
+  return `<div class="card"><div class="label">사용 부품 (스페어 참고)</div>
+   ${sols.length?`<div class="list" style="margin-top:8px">${sols.map(s=>`<div class="h mine"><div class="meta"><span>${esc(s.date||'')}</span><span>${esc(s.site||'')} ${s.wtg?'#'+esc(s.wtg):''}</span><span class="badge new">현장 등록</span></div><b class="small">${esc(s.parts)}</b></div>`).join('')}</div>`:''}
+   ${(()=>{const rr=hist.filter(r=>r.p);return rr.length?`<div class="small" style="margin-top:8px"><b>교체부품 기록 ${rr.length}건</b></div><div class="list" style="margin-top:6px">${rr.slice(0,30).map(r=>`<div class="h"><div class="meta"><span>${esc(r.d)}</span><span>#${String(r.w).padStart(2,'0')}</span>${r.c.length>1?'<span>동시: '+esc(r.c.filter(c=>c!==a.code).join(', '))+'</span>':''}</div><div class="pre small"><b>${esc(r.p)}</b></div></div>`).join('')}</div>`:''})()}
+   ${ps.act.length?`<details style="margin-top:10px"${ps.col.length?'':' open'}><summary class="small"><b>조치내용 중 교체 기록 ${ps.act.length}건</b></summary><div class="list" style="margin-top:6px">${ps.act.slice(0,40).map(x=>`<div class="h"><div class="meta"><span>${esc(x.d)}</span><span>#${String(x.w).padStart(2,'0')}</span>${x.multi?'<span>동시 알람 있음</span>':''}</div><div class="small">${esc(x.t)}</div></div>`).join('')}</div></details>`:''}
+   <p class="src" style="margin-top:8px">출처: 백수 일일운전보고 Replacement Parts 칸 · Remarks 중 '교체' 문구('교체 예정' 제외). 동시 알람이 있던 날의 부품은 각 코드에 함께 표시됩니다.</p></div>`;
+}
+function renderParts(){
+  const m={};
+  for(const r of HIST)for(const it of partItems(r)){if(it.kind!=='col'||/s\/?n|sr ?no|시리얼|^기존|^신품|^새제품/i.test(it.name))continue;const k=partKey(it.name);const o=m[k]||(m[k]={name:it.name,n:0,last:'',codes:{}});o.n++;if(r.d>o.last)o.last=r.d;for(const c of r.c)o.codes[c]=(o.codes[c]||0)+1}
+  const q=(state.pq||'').toLowerCase();
+  const list=Object.values(m).filter(o=>!q||o.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n);
+  main.innerHTML=`<section class="view"><div class="label">부품 교체 기록 (백수 일일운전보고 교체부품 칸) ${list.length}종</div>
+   <form class="f" id="pForm"><input id="pq" placeholder="부품명 검색 (예: fuse, encoder, AINT)" value="${esc(state.pq||'')}"></form>
+   <div class="card" style="overflow-x:auto"><table class="ptab"><thead><tr><th>부품</th><th>횟수</th><th>최근</th><th>같은 날 알람</th></tr></thead><tbody>
+   ${list.slice(0,300).map(o=>`<tr><td>${esc(o.name)}</td><td class="mono">${o.n}</td><td class="mono" style="white-space:nowrap">${esc(o.last.slice(2).replace(/-/g,'.'))}</td><td class="mono small">${Object.entries(o.codes).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c])=>`<a href="#a${esc(c)}" style="color:var(--steel);margin-right:6px">${esc(c)}</a>`).join('')}</td></tr>`).join('')}
+   </tbody></table></div><p class="src">교체부품 칸을 줄 단위로 집계했습니다(S/N 줄 제외). 같은 부품도 표기가 다르면 따로 집계되고, '같은 날 알람'은 그날 함께 기록된 알람이라 직접 원인이 아닐 수 있습니다.</p></section>`;
+  const f=$('#pForm');f.onsubmit=e=>{e.preventDefault();state.pq=$('#pq').value.trim();renderParts()};
+}
 function topActions(rows,n){
   const m={};for(const r of rows)for(const l of actionLines(r.a)){const k=l.replace(/\(\d+회\)/,'').trim();if(k.length<2)continue;m[k]=(m[k]||0)+1}
   return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n);
@@ -323,6 +363,7 @@ function render(){
   if(state.view==='guide'){const g=GUIDES.find(x=>x.id===state.gid);if(g)return renderGuide(g);}
   if(state.view==='alarm'&&getAlarm(state.code)) return renderAlarm(getAlarm(state.code));
   if(state.view==='log') return renderLog();
+  if(state.view==='parts') return renderParts();
   if(state.view==='about') return renderAbout();
   renderHome();
 }
@@ -386,6 +427,7 @@ function renderAlarm(a){
       ${sols.length?`<div class="hist" style="margin-top:6px">${sols.map(s=>solHTML(s)).join('')}</div>`:`<div class="empty" style="margin-top:6px">이 코드로 등록한 조치가 없습니다. 해결하면 <b>+ 조치 등록</b>으로 남겨 주세요.</div>`}</div>
     <div class="card"><div class="label">백수 과거 조치 빈도 (${hist.length}건 중 상위)</div>
       ${top.length?`<div class="bars" style="margin-top:8px">${top.map(([t,n])=>`<div class="bar"><div class="t"><i style="width:${(n/max*100).toFixed(0)}%"></i><span>${esc(t)}</span></div><div class="n">${n}</div></div>`).join('')}</div><p class="src" style="margin-top:8px">출처: 백수 U93 일일운전보고 Remarks 칸 · 상세는 이력 탭</p>`:'<div class="empty" style="margin-top:6px">일일운전보고에 이 코드의 조치 기록이 없습니다.</div>'}</div>
+    ${partsCard(a,hist)}
     ${a.tsm?`<div class="card"><div class="label">Trouble Shooting Manual 절차</div><div class="pre small" style="margin-top:6px">${esc(a.tsm.steps.join('\n'))}</div>${a.tsm.remark?`<p class="small muted">${esc(a.tsm.remark)}</p>`:''}<p class="src">UNS-U88(93)-S502-000 · 관련도면 ${esc(a.tsm.docs.replace('REATED P. ',''))}<br><b>주의:</b> 단자번호(-X..)는 U88E(Nagashima) 도면 기준입니다. 백수/화순 U93 도면(U88U93.03.SC.Control System)과 대조 후 사용하세요.</p></div>`:''}
     <div class="card"><div class="label">일반 점검 순서</div><ol class="steps" style="margin-top:8px">${guide(a).map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
       <p class="src" style="margin-top:8px">알람명 기반 일반 점검 가이드이며 유니슨 공식 절차가 아닙니다. 단자·정상값은 해당 도면/사양서로 확인하세요.</p></div>`;
@@ -572,7 +614,7 @@ main.addEventListener('submit',async e=>{
   catch(err){toast('올리지 못했습니다: '+(err.code||err.message||'오류'))}
 });
 function go(code){const al=!BY[code]&&aliasOf(code);state.aliasFrom=al?code:'';if(al)code=al.to;state.view='alarm';state.code=code;state.tab='meaning';state.wtg='';location.hash='a'+code;render();window.scrollTo(0,0)}
-function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){const al=!BY[m[1]]&&aliasOf(m[1]);state.aliasFrom=al?m[1]:'';state.view='alarm';state.code=al?al.to:m[1];$('#q').value=m[1]}else if(/^s[a-z]+$/.test(h)&&SYSBY[h.slice(1)]){state.view='sys';state.sid=h.slice(1)}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about')state.view=h;render()}
+function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){const al=!BY[m[1]]&&aliasOf(m[1]);state.aliasFrom=al?m[1]:'';state.view='alarm';state.code=al?al.to:m[1];$('#q').value=m[1]}else if(/^s[a-z]+$/.test(h)&&SYSBY[h.slice(1)]){state.view='sys';state.sid=h.slice(1)}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about'||h==='parts')state.view=h;render()}
 window.addEventListener('hashchange',fromHash);
 
 loadStatic().then(()=>{fromHash();connect();});
