@@ -431,7 +431,7 @@ function renderHome(){
   const recent=SOL.slice(0,5);
   main.innerHTML=`<section class="view">
     <div class="card small">알람코드를 입력하면 <b>알람 의미 · 과거 조치이력 · 점검 순서 · 점검 위치 도면</b>을 한 화면에서 봅니다. 새로 찾은 해결법은 오른쪽 아래 <b>+ 조치 등록</b>으로 남기면 같은 코드 조회 시 맨 위에 표시됩니다.</div>
-    <div><div class="label">최근 등록한 조치</div>
+    <div><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">최근 등록한 조치</div><button class="btn" id="exportBtn" type="button">백업 저장</button></div>
     ${recent.length?`<div class="hist" style="margin-top:6px">${recent.map(s=>solHTML(s,true)).join('')}</div>`:`<div class="empty" style="margin-top:6px">아직 등록한 조치가 없습니다. 오늘 해결한 알람이 있다면 <b>+ 조치 등록</b>으로 첫 기록을 남겨 보세요.</div>`}</div>
     <div><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">계통도 가이드 ${GUIDES.length}건</div><button class="btn" type="button" data-newguide="1">+ 가이드 만들기</button></div>
     ${GUIDES.length?`<div class="list" style="margin-top:6px">${GUIDES.slice(0,6).map(guideCard).join('')}</div>`:`<div class="empty" style="margin-top:6px">${db?'도면 캡처에 설명을 붙인 계통도 가이드가 아직 없습니다.':'계통도 가이드는 공유 저장소가 연결된 화면에서 보입니다.'}</div>`}</div>
@@ -643,7 +643,7 @@ main.addEventListener('click',async e=>{
   if(t.dataset.tab){state.tab=t.dataset.tab;render();return}
   if(t.dataset.wtg!==undefined){state.wtg=t.dataset.wtg;render();return}
   if(t.id==='exportBtn'){
-    const data=JSON.stringify({exported:new Date().toISOString(),solutions:SOL,drawings:DRW},null,1);
+    const data=JSON.stringify({exported:new Date().toISOString(),solutions:SOL,drawings:DRW,guides:GUIDES,aliases:ALIAS,note:'도면·사진 이미지 파일은 포함되지 않음(asset id만 기록)'},null,1);
     if(downloads){try{await downloads.save({filename:'u93-alarm-notes-'+new Date().toISOString().slice(0,10)+'.json',data});toast('저장 요청을 보냈습니다')}catch(err){toast('저장이 취소되었거나 실패했습니다')}}
     else{try{await navigator.clipboard.writeText(data);toast('백업 내용을 클립보드에 복사했습니다')}catch(err){toast('이 환경에서는 백업 저장을 지원하지 않습니다')}}
     return;
