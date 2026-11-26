@@ -349,7 +349,7 @@ function renderHome(){
     <div><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">계통도 가이드 ${GUIDES.length}건</div><button class="btn" type="button" data-newguide="1">+ 가이드 만들기</button></div>
     ${GUIDES.length?`<div class="list" style="margin-top:6px">${GUIDES.slice(0,6).map(guideCard).join('')}</div>`:`<div class="empty" style="margin-top:6px">${db?'도면 캡처에 설명을 붙인 계통도 가이드가 아직 없습니다.':'계통도 가이드는 공유 저장소가 연결된 화면에서 보입니다.'}</div>`}</div>
     <div><div class="label">시스템 계통도 (백수 제어도면) ${SYS.length}종</div><div class="list" style="margin-top:6px">${SYS.map(sysCard).join('')}</div></div>
-    <div><div class="label">백수 U93 자주 발생한 알람 (2015–2024.02 일일운전보고)</div>
+    <div><div class="label">백수 U93 자주 발생한 알람 (2015–2026.08 일일운전보고)</div>
     <div class="list" style="margin-top:6px">${top.map(([c])=>rowHTML(BY[c])).join('')}</div></div>
   </section>`;
 }
