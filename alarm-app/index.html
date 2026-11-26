@@ -487,7 +487,7 @@ function renderAlarm(a){
     <div class="card"><div class="label">백수 일일운전보고 이력 ${hist.length}건</div>
     ${wtgs.length>1?`<div class="nav" style="margin-top:8px"><button class="chip" data-wtg="" aria-pressed="${!fw}">전체</button>${wtgs.map(w=>`<button class="chip" data-wtg="${w}" aria-pressed="${fw===String(w)}">#${String(w).padStart(2,'0')}</button>`).join('')}</div>`:''}
     ${rows.length?`<div class="hist" style="margin-top:10px">${rows.slice(0,150).map(r=>`<div class="h"><div class="meta"><span>${esc(r.d)}</span><span>#${String(r.w).padStart(2,'0')}</span>${r.c.length>1?`<span>동시: ${esc(r.c.filter(c=>c!==a.code).join(', '))}</span>`:''}${r.m?`<span>${esc(r.m.replace(/\n/g,' '))}</span>`:''}</div>${r.e?`<div class="small muted">${esc(r.e.replace(/\n/g,' / '))}</div>`:''}<div class="pre small">${esc(r.a)}</div>${r.p?`<div class="small"><b>부품</b> ${esc(r.p)}</div>`:''}</div>`).join('')}</div>${rows.length>150?'<p class="small muted">최근 150건만 표시</p>':''}`:'<div class="empty" style="margin-top:6px">기록 없음</div>'}
-    <p class="src" style="margin-top:8px">2018–2020년 파일은 용량 제한(10MB 초과)으로 아직 포함되지 않았습니다.</p></div>`;
+    <p class="src" style="margin-top:8px">기간 2015.01~2026.08 (2018~2020 포함). 리셋·제한운전·감압·가압만 있는 날은 제외했습니다.</p></div>`;
   }else{
     const z=zonesFor(a), d=drwFor(a.code), gl=guidesFor(a.code);
     body=`${autoBlock(a,true)}
@@ -565,7 +565,7 @@ function renderAbout(){
   <ul>
    <li>알람 ${ALARMS.length}개 — UNISON ALARM LIST for U88/U93 (UNS-U93(88)-S135K-000, Rev.0, 2016-09-26, 한글판). 그중 ${ALARMS.filter(a=>a.src==='verified').length}개는 Trouble Shooting Manual(UNS-U88(93)-S502-000, 2015-09-15) 알람표와 명칭이 일치해 발생 조건·정지 동작·Reset·반복조건을 함께 표시합니다. 나머지는 <span class="badge chk">원문 대조 필요</span>로 표시됩니다.</li>
    <li>한글 설명은 PDF 텍스트 자동 추출 결과 중 알람명과 키워드가 맞는 것만 넣었습니다(${ALARMS.filter(a=>a.desc_ko).length}개). 판단 전 원문 페이지를 확인하세요.</li>
-   <li>과거 이력 ${HIST.length.toLocaleString()}건 — 백수 U93 일일운전보고 중 조치/부품 기록이 있는 날: ${SOURCES.map(esc).join(', ')}. 2018–2020년 원본은 10MB를 넘어 아직 넣지 못했습니다.</li>
+   <li>과거 이력 ${HIST.length.toLocaleString()}건 — 백수 U93 일일운전보고 중 조치/부품 기록이 있는 날: ${SOURCES.map(esc).join(', ')}.</li>
    <li>PCS(34xx) 알람은 U88E 매뉴얼과 U93 알람리스트의 내용이 달라, U93 알람리스트 명칭만 사용했습니다.</li>
    <li>도면 — 나셀/하부: U88U93.03.SC.Control System.00-E(백수). 피치: Moog 13.2 Pitch CDL43005-002-A (Circuit diagram 180-50331 Rev P004, PITCHmaster II 매뉴얼 Rev.4, AC400 충전기 매뉴얼). PCS: ABB ACS800-87LC-2685/2205-7, 3AUA0000058399. 알람명의 부품기호(5F4·6Q1·15K1 등)로 도면 위치를 연결했으며, 알람명과 도면 기능이 다른 경우 표시했습니다.</li>
   </ul>
