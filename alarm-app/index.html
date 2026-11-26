@@ -152,7 +152,7 @@ details summary{cursor:pointer}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const main=$('#main');
-let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[],ALIAS={},SYS=[],SYSBY={};
+let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[],ALIAS={},SYS=[],SYSBY={},INV=null;
 let db=null,assets=null,user=null,downloads=null,myId=null;
 let state={view:'home',code:null,tab:'meaning',query:''};
 
@@ -232,6 +232,7 @@ function guide(a){
 async function loadStatic(){
   try{
     const [a,h,s]=await Promise.all([fetch('data/alarms.json').then(r=>r.json()),fetch('data/history.json').then(r=>r.json()),fetch('data/sources.json').then(r=>r.json()).catch(()=>[])]);
+    try{INV=await fetch('data/inventory.json').then(r=>r.json())}catch(e){}
     try{SYS=await fetch('data/sysguides.json').then(r=>r.json());for(const g of SYS)SYSBY[g.id]=g}catch(e){}
     ALARMS=a;HIST=h;SOURCES=s;
     for(const x of ALARMS)BY[x.code]=x;
@@ -320,7 +321,16 @@ function partItems(r){
   for(const l of actionLines(r.a)){if(/교체/.test(l)&&!/교체\s*예정|교체예정|교체\s*필요|교체\s*요망|교체\s*검토/.test(l))out.push({name:l,kind:'act'})}
   return out;
 }
-function partKey(n){return n.toLowerCase().replace(/\s+/g,' ').replace(/\(?\d+\s*ea\)?/g,'').trim()}
+const KO2EN=[[/퓨즈/g,'fuse'],[/모듈/g,'module'],[/스택/g,'stack'],[/배터리/g,'battery'],[/엔코더|인코더/g,'encoder'],[/레졸버|리졸버|레졸브/g,'resolver'],[/케이블/g,'cable'],[/팬/g,'fan'],[/필터/g,'filter'],[/릴레이/g,'relay'],[/센서/g,'sensor'],[/모터/g,'motor'],[/충전기|차저/g,'charger'],[/피치마스터/g,'pitchmaster'],[/슬립링/g,'slipring'],[/보드/g,'board'],[/스위치/g,'switch'],[/그리스/g,'grease'],[/오일/g,'oil'],[/브레이크/g,'brake'],[/히터/g,'heater'],[/피치/g,'pitch'],[/아트라스/g,'atlas']];
+function partKey(n){
+  let t=String(n).toLowerCase();
+  for(const [re,en] of KO2EN)t=t.replace(re,en);
+  t=t.replace(/\(?\s*\d+\s*(ea|개|pcs|set|본|매)\s*\)?/g,' ').replace(/\b(sp|ps|pc|el|cl|gb|al)-?\d{2,4}\b/g,' ').replace(/교체|신품|새제품|수리품|정품/g,' ');
+  return t.replace(/[^a-z0-9가-힣]/g,'');
+}
+const INVKW=[[/pitchmaster/,[26,27]],[/acfuse/,[14]],[/igbtmodulefan|igbtfan|modulefan/,[13]],[/encoder|resolver/,[19]],[/charger|changer/,[21]],[/slipring/,[20]],[/pressureswitch/,[22]],[/motorfan/,[23]],[/pitchmotor/,[24]],[/limitswitch/,[15]],[/c2w|c2\/w/,[25]],[/s1w|s1\/w/,[18]],[/thermovalve/,[17]],[/distributor/,[16]],[/gbfilter|g\/bfilter|pressurefilter/,[10,11,12]]];
+function invFor(key){if(!INV)return [];for(const [re,nos] of INVKW)if(re.test(key))return INV.items.filter(x=>nos.includes(x.no));return []}
+function invText(key){const it=invFor(key);return it.length?it.map(x=>`${x.name}${x.item?' '+x.item:''} 보유 ${x.stock==null?'?':x.stock}${x.unit}`).join(' · '):''}
 function partsSummary(rows){
   const col={},act=[];
   for(const r of rows)for(const it of partItems(r)){
@@ -334,20 +344,24 @@ function partsCard(a,hist){
   if(!ps.col.length&&!ps.act.length&&!sols.length)return `<div class="card"><div class="label">사용 부품 (스페어 참고)</div><p class="small muted" style="margin:6px 0 0">일일운전보고에 이 코드의 부품 교체 기록이 없습니다.</p></div>`;
   return `<div class="card"><div class="label">사용 부품 (스페어 참고)</div>
    ${sols.length?`<div class="list" style="margin-top:8px">${sols.map(s=>`<div class="h mine"><div class="meta"><span>${esc(s.date||'')}</span><span>${esc(s.site||'')} ${s.wtg?'#'+esc(s.wtg):''}</span><span class="badge new">현장 등록</span></div><b class="small">${esc(s.parts)}</b></div>`).join('')}</div>`:''}
-   ${(()=>{const rr=hist.filter(r=>r.p);return rr.length?`<div class="small" style="margin-top:8px"><b>교체부품 기록 ${rr.length}건</b></div><div class="list" style="margin-top:6px">${rr.slice(0,30).map(r=>`<div class="h"><div class="meta"><span>${esc(r.d)}</span><span>#${String(r.w).padStart(2,'0')}</span>${r.c.length>1?'<span>동시: '+esc(r.c.filter(c=>c!==a.code).join(', '))+'</span>':''}</div><div class="pre small"><b>${esc(r.p)}</b></div></div>`).join('')}</div>`:''})()}
+   ${(()=>{const g={};for(const r of hist)for(const it of partItems(r)){if(it.kind!=='col'||/s\/?n|sr ?no|시리얼|^기존|^신품|^새제품/i.test(it.name))continue;const k=partKey(it.name);if(!k)continue;const o=g[k]||(g[k]={names:{},n:0,last:''});o.names[it.name]=(o.names[it.name]||0)+1;o.n++;if(r.d>o.last)o.last=r.d}
+      const L=Object.entries(g).sort((a,b)=>b[1].n-a[1].n);if(!L.length)return '';
+      return `<table class="ptab" style="margin-top:8px"><thead><tr><th>부품 (같은 표기 합침)</th><th>횟수</th><th>최근</th></tr></thead><tbody>${L.slice(0,12).map(([k,o])=>{const nm=Object.entries(o.names).sort((a,b)=>b[1]-a[1]);const inv=invText(k);return `<tr><td><b>${esc(nm[0][0])}</b>${nm.length>1?`<div class="small muted">다른 표기: ${esc(nm.slice(1).map(x=>x[0]).join(' / '))}</div>`:''}${inv?`<div class="small" style="color:var(--ok)">재고: ${esc(inv)}</div>`:''}</td><td class="mono">${o.n}</td><td class="mono" style="white-space:nowrap">${esc(o.last.slice(2).replace(/-/g,'.'))}</td></tr>`}).join('')}</tbody></table>`})()}
+   ${(()=>{const rr=hist.filter(r=>r.p);return rr.length?`<details style="margin-top:10px"><summary class="small"><b>교체부품 원문 기록 ${rr.length}건 (S/N 포함)</b></summary><div class="list" style="margin-top:6px">${rr.slice(0,30).map(r=>`<div class="h"><div class="meta"><span>${esc(r.d)}</span><span>#${String(r.w).padStart(2,'0')}</span>${r.c.length>1?'<span>동시: '+esc(r.c.filter(c=>c!==a.code).join(', '))+'</span>':''}</div><div class="pre small"><b>${esc(r.p)}</b></div></div>`).join('')}</div></details>`:''})()}
    ${ps.act.length?`<details style="margin-top:10px"${ps.col.length?'':' open'}><summary class="small"><b>조치내용 중 교체 기록 ${ps.act.length}건</b></summary><div class="list" style="margin-top:6px">${ps.act.slice(0,40).map(x=>`<div class="h"><div class="meta"><span>${esc(x.d)}</span><span>#${String(x.w).padStart(2,'0')}</span>${x.multi?'<span>동시 알람 있음</span>':''}</div><div class="small">${esc(x.t)}</div></div>`).join('')}</div></details>`:''}
    <p class="src" style="margin-top:8px">출처: 백수 일일운전보고 Replacement Parts 칸 · Remarks 중 '교체' 문구('교체 예정' 제외). 동시 알람이 있던 날의 부품은 각 코드에 함께 표시됩니다.</p></div>`;
 }
 function renderParts(){
   const m={};
-  for(const r of HIST)for(const it of partItems(r)){if(it.kind!=='col'||/s\/?n|sr ?no|시리얼|^기존|^신품|^새제품/i.test(it.name))continue;const k=partKey(it.name);const o=m[k]||(m[k]={name:it.name,n:0,last:'',codes:{}});o.n++;if(r.d>o.last)o.last=r.d;for(const c of r.c)o.codes[c]=(o.codes[c]||0)+1}
+  for(const r of HIST)for(const it of partItems(r)){if(it.kind!=='col'||/s\/?n|sr ?no|시리얼|^기존|^신품|^새제품/i.test(it.name))continue;const k=partKey(it.name);if(!k)continue;const o=m[k]||(m[k]={key:k,names:{},n:0,last:'',codes:{}});o.names[it.name]=(o.names[it.name]||0)+1;o.n++;if(r.d>o.last)o.last=r.d;for(const c of r.c)o.codes[c]=(o.codes[c]||0)+1}
   const q=(state.pq||'').toLowerCase();
-  const list=Object.values(m).filter(o=>!q||o.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n);
-  main.innerHTML=`<section class="view"><div class="label">부품 교체 기록 (백수 일일운전보고 교체부품 칸) ${list.length}종</div>
+  for(const o of Object.values(m)){const nm=Object.entries(o.names).sort((a,b)=>b[1]-a[1]);o.name=nm[0][0];o.alt=nm.slice(1).map(x=>x[0]);o.inv=invText(o.key)}
+  const q2=partKey(q);const list=Object.values(m).filter(o=>!q||o.key.includes(q2)||[o.name,...o.alt].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.n-a.n);
+  main.innerHTML=`<section class="view"><div class="label">부품 교체 기록 (백수 일일운전보고 교체부품 칸) ${list.length}종</div>${INV?`<div class="small muted">재고는 예비품·소모품 재고현황(${esc(INV.updated)} 업데이트) 기준 · 해당 품목 ${INV.items.length}종만 연결</div>`:''}
    <form class="f" id="pForm"><input id="pq" placeholder="부품명 검색 (예: fuse, encoder, AINT)" value="${esc(state.pq||'')}"></form>
    <div class="card" style="overflow-x:auto"><table class="ptab"><thead><tr><th>부품</th><th>횟수</th><th>최근</th><th>같은 날 알람</th></tr></thead><tbody>
-   ${list.slice(0,300).map(o=>`<tr><td>${esc(o.name)}</td><td class="mono">${o.n}</td><td class="mono" style="white-space:nowrap">${esc(o.last.slice(2).replace(/-/g,'.'))}</td><td class="mono small">${Object.entries(o.codes).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c])=>`<a href="#a${esc(c)}" style="color:var(--steel);margin-right:6px">${esc(c)}</a>`).join('')}</td></tr>`).join('')}
-   </tbody></table></div><p class="src">교체부품 칸을 줄 단위로 집계했습니다(S/N 줄 제외). 같은 부품도 표기가 다르면 따로 집계되고, '같은 날 알람'은 그날 함께 기록된 알람이라 직접 원인이 아닐 수 있습니다.</p></section>`;
+   ${list.slice(0,300).map(o=>`<tr><td><b>${esc(o.name)}</b>${o.alt.length?`<div class="small muted">다른 표기 ${o.alt.length}: ${esc(o.alt.slice(0,4).join(' / '))}${o.alt.length>4?' …':''}</div>`:''}${o.inv?`<div class="small" style="color:var(--ok)">재고: ${esc(o.inv)}</div>`:''}</td><td class="mono">${o.n}</td><td class="mono" style="white-space:nowrap">${esc(o.last.slice(2).replace(/-/g,'.'))}</td><td class="mono small">${Object.entries(o.codes).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c])=>`<a href="#a${esc(c)}" style="color:var(--steel);margin-right:6px">${esc(c)}</a>`).join('')}</td></tr>`).join('')}
+   </tbody></table></div><p class="src">교체부품 칸을 줄 단위로 집계했습니다(S/N 줄 제외). 대소문자·띄어쓰기·수량(2ea 등)·한/영 표기(퓨즈=fuse 등)가 달라도 같은 글자면 하나로 합쳤고, '같은 날 알람'은 그날 함께 기록된 알람이라 직접 원인이 아닐 수 있습니다.</p></section>`;
   const f=$('#pForm');f.onsubmit=e=>{e.preventDefault();state.pq=$('#pq').value.trim();renderParts()};
 }
 function topActions(rows,n){
