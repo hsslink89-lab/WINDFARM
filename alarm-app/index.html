@@ -69,7 +69,7 @@ h2{font-size:15px;margin:0;letter-spacing:.01em}
 .fact b{display:block;font-size:14px;overflow-wrap:anywhere}
 .fact span{font-size:12px;color:var(--muted)}
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
-.tab{background:none;border:none;border-bottom:3px solid transparent;padding:9px 12px;color:var(--muted);font-weight:500;white-space:nowrap}
+.tab{background:none;border:none;border-bottom:3px solid transparent;padding:9px 8px;color:var(--muted);font-weight:500;white-space:nowrap}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--amber);font-weight:700}
 .pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
 .src{font-size:12px;color:var(--muted);border-left:3px solid var(--line);padding-left:8px}
@@ -119,6 +119,7 @@ form.f{display:grid;gap:10px}
 .stepbox{display:grid;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px}
 .ptab{width:100%;border-collapse:collapse;font-size:13px}.ptab th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);padding:4px 6px}.ptab td{border-bottom:1px solid var(--line);padding:6px;vertical-align:top;overflow-wrap:anywhere}
 details summary{cursor:pointer}
+.ptab th,.ptab td.mono{white-space:nowrap}
 .del{color:var(--crit);border-color:transparent;background:transparent;padding:2px 6px;font-size:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -421,7 +422,8 @@ function solHTML(s,showCode){
 }
 function renderAlarm(a){
   const hist=HBY[a.code]||[], sols=solFor(a.code).sort((p,q)=>(q.pinned?1:0)-(p.pinned?1:0));
-  const tabs=[['meaning','의미'],['act','조치'],['hist','이력 '+(hist.length+sols.length)],['draw','도면']];
+  const pcount=hist.filter(r=>r.p).length+sols.filter(x=>x.parts).length;
+  const tabs=[['meaning','의미'],['act','조치'],['hist','이력 '+(hist.length+sols.length)],['parts','부품 '+pcount],['draw','도면']];
   let body='';
   if(state.tab==='meaning'){
     body=`<div class="card"><div class="label">발생 조건 (원문)</div><div class="pre mono small" style="margin-top:4px">${esc(a.condition||'—')}</div>
@@ -441,10 +443,12 @@ function renderAlarm(a){
       ${sols.length?`<div class="hist" style="margin-top:6px">${sols.map(s=>solHTML(s)).join('')}</div>`:`<div class="empty" style="margin-top:6px">이 코드로 등록한 조치가 없습니다. 해결하면 <b>+ 조치 등록</b>으로 남겨 주세요.</div>`}</div>
     <div class="card"><div class="label">백수 과거 조치 빈도 (${hist.length}건 중 상위)</div>
       ${top.length?`<div class="bars" style="margin-top:8px">${top.map(([t,n])=>`<div class="bar"><div class="t"><i style="width:${(n/max*100).toFixed(0)}%"></i><span>${esc(t)}</span></div><div class="n">${n}</div></div>`).join('')}</div><p class="src" style="margin-top:8px">출처: 백수 U93 일일운전보고 Remarks 칸 · 상세는 이력 탭</p>`:'<div class="empty" style="margin-top:6px">일일운전보고에 이 코드의 조치 기록이 없습니다.</div>'}</div>
-    ${partsCard(a,hist)}
+    <button class="btn" type="button" data-tab="parts">사용 부품 보기 →</button>
     ${a.tsm?`<div class="card"><div class="label">Trouble Shooting Manual 절차</div><div class="pre small" style="margin-top:6px">${esc(a.tsm.steps.join('\n'))}</div>${a.tsm.remark?`<p class="small muted">${esc(a.tsm.remark)}</p>`:''}<p class="src">UNS-U88(93)-S502-000 · 관련도면 ${esc(a.tsm.docs.replace('REATED P. ',''))}<br><b>주의:</b> 단자번호(-X..)는 U88E(Nagashima) 도면 기준입니다. 백수/화순 U93 도면(U88U93.03.SC.Control System)과 대조 후 사용하세요.</p></div>`:''}
     <div class="card"><div class="label">일반 점검 순서</div><ol class="steps" style="margin-top:8px">${guide(a).map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
       <p class="src" style="margin-top:8px">알람명 기반 일반 점검 가이드이며 유니슨 공식 절차가 아닙니다. 단자·정상값은 해당 도면/사양서로 확인하세요.</p></div>`;
+  }else if(state.tab==='parts'){
+    body=partsCard(a,hist);
   }else if(state.tab==='hist'){
     const wtgs=[...new Set(hist.map(r=>r.w))].sort((x,y)=>x-y);
     const fw=state.wtg||'';
@@ -475,6 +479,9 @@ function renderAlarm(a){
     <div class="card hero"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="big">${esc(a.code)}</span>${lvl(a)}</div>
       <div class="title">${esc(a.name)}</div>
       <div class="small muted">${esc(a.category)} · ${esc(a.type)}${a.reset?' · Reset '+esc(a.reset):''}</div>
+      ${(()=>{const g={};for(const r of hist)for(const it of partItems(r)){if(it.kind!=='col'||/s\/?n|sr ?no|시리얼|^기존|^신품|^새제품/i.test(it.name))continue;const k=partKey(it.name);if(!k)continue;const o=g[k]||(g[k]={nm:{},n:0});o.nm[it.name]=(o.nm[it.name]||0)+1;o.n++}
+        const L=Object.values(g).sort((x,y)=>y.n-x.n).slice(0,3);if(!L.length)return '';
+        return `<button class="btn ghost" type="button" data-tab="parts" style="text-align:left;padding:6px 0;border:none"><span class="small"><b>자주 쓴 부품</b> ${L.map(o=>esc(Object.entries(o.nm).sort((x,y)=>y[1]-x[1])[0][0])+' ×'+o.n).join(' · ')} →</span></button>`})()}
       ${(()=>{const from=state.aliasFrom||Object.keys(ALIAS).filter(k=>ALIAS[k].to===a.code).join(', ');return from?`<div class="note">현장 표기 <b>${esc(from)}</b> = 이 알람(${esc(a.code)})으로 기록되어 있습니다.${ALIAS[from]&&ALIAS[from].note?' '+esc(ALIAS[from].note):''}</div>`:''})()}</div>
     <div class="tabs" role="tablist">${tabs.map(([k,t])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${state.tab===k}">${esc(t)}</button>`).join('')}</div>
     ${body}</section>`;
