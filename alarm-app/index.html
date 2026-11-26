@@ -149,7 +149,7 @@ form.f{display:grid;gap:10px}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const main=$('#main');
-let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[],ALIAS={};
+let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[],ALIAS={},SYS=[],SYSBY={};
 let db=null,assets=null,user=null,downloads=null,myId=null;
 let state={view:'home',code:null,tab:'meaning',query:''};
 
@@ -229,6 +229,7 @@ function guide(a){
 async function loadStatic(){
   try{
     const [a,h,s]=await Promise.all([fetch('data/alarms.json').then(r=>r.json()),fetch('data/history.json').then(r=>r.json()),fetch('data/sources.json').then(r=>r.json()).catch(()=>[])]);
+    try{SYS=await fetch('data/sysguides.json').then(r=>r.json());for(const g of SYS)SYSBY[g.id]=g}catch(e){}
     ALARMS=a;HIST=h;SOURCES=s;
     for(const x of ALARMS)BY[x.code]=x;
     for(const r of HIST)for(const c of r.c)(HBY[c]=HBY[c]||[]).push(r);
@@ -271,6 +272,33 @@ function getAlarm(code){
 }
 function searchGuides(q){q=q.trim().toLowerCase();if(!q)return [];const t=q.split(/\s+/);
   return GUIDES.filter(g=>{const s=[g.title,g.intro,(g.codes||[]).join(' '),...(g.steps||[]).map(x=>x.title+' '+x.text)].join(' ').toLowerCase();return t.every(w=>s.includes(w))})}
+const DWG='U88/U93.03.SC.Control System.00-E(백수)';
+const pimg=p=>'dwg/p-'+String(p).padStart(2,'0')+'.jpg';
+function pageFig(pg,cap){return `<figure style="margin:0;display:grid;gap:4px"><a class="gimg" href="${pimg(pg.page)}" target="_blank" rel="noopener"><img src="${pimg(pg.page)}" alt="${esc(pg.title)}" loading="lazy"></a><figcaption class="small muted">${esc(pg.sheet)} ${esc(pg.title)} · PDF ${pg.page}쪽${cap?' · '+esc(cap):''}</figcaption></figure>`}
+function sysCard(g){return `<button class="row" data-sys="${esc(g.id)}" style="grid-template-columns:64px 1fr auto"><span class="code" style="font-size:13px">계통도</span><span class="nm">${esc(g.title)}<small>백수 제어도면 ${g.pages.length}쪽</small></span><span class="cnt">보기</span></button>`}
+function autoBlock(a,full){
+  const sys=(a.sys||[]).map(i=>SYSBY[i]).filter(Boolean), io=a.io||[];
+  if(!sys.length&&!io.length)return '';
+  const meta=p=>{for(const g of SYS)for(const x of g.pages)if(x.page===p)return x;return {page:p,sheet:'',title:''}};
+  const ioHTML=io.length?`<div class="label" style="margin-top:4px">이 알람의 입력 신호 (알람명 기준 매칭${io.length>1?' · 후보':''})</div>
+    <div class="list">${io.map(x=>`<div class="h"><div class="meta"><span>${esc(x.addr)}</span><span>${esc(meta(x.page).sheet)} · PDF ${x.page}쪽</span></div><b class="small">${esc(x.sig)}</b></div>`).join('')}</div>
+    ${pageFig(meta(io[0].page),'신호: '+io[0].sig)}`:'';
+  return `<div class="card" style="display:grid;gap:10px"><div class="label">계통도 · ${esc(DWG)}</div>
+    ${ioHTML}
+    <div class="label" style="margin-top:4px">관련 계통 (전원 → 제어 → 신호)</div><div class="list">${sys.map(sysCard).join('')}</div>
+    ${full&&sys[0]?`<div class="pre small">${esc(sys[0].text)}</div>`:''}
+    <p class="src">도면 이미지를 누르면 원본 크기로 열립니다. 입력 신호 매칭은 알람명과 PLC 신호명을 자동 비교한 결과라 현장 확인이 필요합니다.${(a.sys||[]).includes('pitch')?' 허브 내부 배선은 피치 제조사 도면을 보세요.':''}</p></div>`;
+}
+function renderSys(g){
+  const rel=ALARMS.filter(a=>(a.sys||[]).includes(g.id));
+  main.innerHTML=`<section class="view">
+   <div class="card hero"><div class="label">계통도 · 백수 제어도면</div><div class="title">${esc(g.title)}</div><div class="small muted">${esc(DWG)} · 2014.10.08 승인본 · 연결 알람 ${rel.length}개</div></div>
+   <div class="card"><div class="pre small">${esc(g.text)}</div></div>
+   <div class="card"><div class="label">점검 포인트</div><ol class="steps" style="margin-top:8px">${g.checks.map(c=>`<li>${esc(c)}</li>`).join('')}</ol><p class="src" style="margin-top:8px">작업 전 해당 MMS/차단기 개방·LOTO, 잔류에너지 확인. 정상값은 부품 사양서 기준.</p></div>
+   <div class="card" style="display:grid;gap:14px"><div class="label">도면 ${g.pages.length}쪽</div>${g.pages.map(pg=>pageFig(pg)).join('')}</div>
+   <div class="card"><div class="label">이 계통에 연결된 알람</div><div class="codechips" style="margin-top:8px">${rel.slice(0,120).map(a=>`<button class="chip" data-code="${esc(a.code)}">${esc(a.code)}</button>`).join('')}</div></div>
+  </section>`;
+}
 function guideCard(g){return `<button class="row" data-guide="${esc(g.id)}" style="grid-template-columns:64px 1fr auto"><span class="code" style="font-size:13px">계통도</span><span class="nm">${esc(g.title)}<small>${esc((g.codes||[]).join(', '))} · ${(g.steps||[]).length}장</small></span><span class="cnt">보기</span></button>`}
 function freq(){const m={};for(const r of HIST)for(const c of r.c)m[c]=(m[c]||0)+1;return m}
 let FREQ=null;
@@ -291,6 +319,7 @@ function topActions(rows,n){
 function render(){
   if(!ALARMS.length)return;
   document.querySelectorAll('[data-go]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.go===state.view||(state.view==='alarm'&&b.dataset.go==='home'&&false))));
+  if(state.view==='sys'&&SYSBY[state.sid])return renderSys(SYSBY[state.sid]);
   if(state.view==='guide'){const g=GUIDES.find(x=>x.id===state.gid);if(g)return renderGuide(g);}
   if(state.view==='alarm'&&getAlarm(state.code)) return renderAlarm(getAlarm(state.code));
   if(state.view==='log') return renderLog();
@@ -304,10 +333,10 @@ function rowHTML(a){
 function renderHome(){
   const q=state.query;
   if(q){
-    const r=searchAlarms(q), gs=searchGuides(q), x=getAlarm(q.trim());
+    const r=searchAlarms(q), gs=searchGuides(q), x=getAlarm(q.trim()), ss=q.trim().length>1&&!/^\d+$/.test(q.trim())?SYS.filter(g=>(g.title+' '+g.text).toLowerCase().includes(q.trim().toLowerCase())):[];
     const al=aliasOf(q.trim());
     if(x&&!BY[q.trim()]&&!r.includes(x)) r.unshift(x);
-    main.innerHTML=`<section class="view">${gs.length?`<div class="label">계통도 가이드 ${gs.length}건</div><div class="list">${gs.map(guideCard).join('')}</div>`:''}${al?`<div class="note"><b>${esc(q.trim())}</b> → <b>${esc(al.to)}</b>로 기록된 코드입니다. ${esc(al.note||'')}</div>`:''}<div class="label">알람 검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
+    main.innerHTML=`<section class="view">${ss.length?`<div class="label">시스템 계통도 ${ss.length}건</div><div class="list">${ss.map(sysCard).join('')}</div>`:''}${gs.length?`<div class="label">계통도 가이드 ${gs.length}건</div><div class="list">${gs.map(guideCard).join('')}</div>`:''}${al?`<div class="note"><b>${esc(q.trim())}</b> → <b>${esc(al.to)}</b>로 기록된 코드입니다. ${esc(al.note||'')}</div>`:''}<div class="label">알람 검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
     return;
   }
   FREQ=FREQ||freq();
@@ -319,6 +348,7 @@ function renderHome(){
     ${recent.length?`<div class="hist" style="margin-top:6px">${recent.map(s=>solHTML(s,true)).join('')}</div>`:`<div class="empty" style="margin-top:6px">아직 등록한 조치가 없습니다. 오늘 해결한 알람이 있다면 <b>+ 조치 등록</b>으로 첫 기록을 남겨 보세요.</div>`}</div>
     <div><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">계통도 가이드 ${GUIDES.length}건</div><button class="btn" type="button" data-newguide="1">+ 가이드 만들기</button></div>
     ${GUIDES.length?`<div class="list" style="margin-top:6px">${GUIDES.slice(0,6).map(guideCard).join('')}</div>`:`<div class="empty" style="margin-top:6px">${db?'도면 캡처에 설명을 붙인 계통도 가이드가 아직 없습니다.':'계통도 가이드는 공유 저장소가 연결된 화면에서 보입니다.'}</div>`}</div>
+    <div><div class="label">시스템 계통도 (백수 제어도면) ${SYS.length}종</div><div class="list" style="margin-top:6px">${SYS.map(sysCard).join('')}</div></div>
     <div><div class="label">백수 U93 자주 발생한 알람 (2015–2024.02 일일운전보고)</div>
     <div class="list" style="margin-top:6px">${top.map(([c])=>rowHTML(BY[c])).join('')}</div></div>
   </section>`;
@@ -351,7 +381,7 @@ function renderAlarm(a){
   }else if(state.tab==='act'){
     const top=topActions(hist,8), max=top[0]?top[0][1]:1;
     const gl=guidesFor(a.code);
-    body=`${gl.length?`<div class="card"><div class="label">먼저 볼 계통도</div><div class="list" style="margin-top:6px">${gl.map(guideCard).join('')}</div></div>`:''}<div class="note"><b>작업 전</b> 운전 정지 · 해당 회로 전원 차단(LOTO) · 허브/로터 작업 시 로터락 · 피치 배터리·DC link 등 잔류 에너지 확인. 보호회로 우회·근거 없는 파라미터 변경 금지.</div>
+    body=`${gl.length?`<div class="card"><div class="label">먼저 볼 계통도</div><div class="list" style="margin-top:6px">${gl.map(guideCard).join('')}</div></div>`:''}${autoBlock(a,false)}<div class="note"><b>작업 전</b> 운전 정지 · 해당 회로 전원 차단(LOTO) · 허브/로터 작업 시 로터락 · 피치 배터리·DC link 등 잔류 에너지 확인. 보호회로 우회·근거 없는 파라미터 변경 금지.</div>
     <div class="card"><div class="label">현장 등록 조치 ${sols.length}건</div>
       ${sols.length?`<div class="hist" style="margin-top:6px">${sols.map(s=>solHTML(s)).join('')}</div>`:`<div class="empty" style="margin-top:6px">이 코드로 등록한 조치가 없습니다. 해결하면 <b>+ 조치 등록</b>으로 남겨 주세요.</div>`}</div>
     <div class="card"><div class="label">백수 과거 조치 빈도 (${hist.length}건 중 상위)</div>
@@ -370,8 +400,9 @@ function renderAlarm(a){
     <p class="src" style="margin-top:8px">2018–2020년 파일은 용량 제한(10MB 초과)으로 아직 포함되지 않았습니다.</p></div>`;
   }else{
     const z=zonesFor(a), d=drwFor(a.code), gl=guidesFor(a.code);
-    body=`<div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">계통도 가이드 ${gl.length}건</div><button class="btn" type="button" data-newguide="${esc(a.code)}">+ 가이드 만들기</button></div>
-      ${gl.length?`<div class="list" style="margin-top:8px">${gl.map(guideCard).join('')}</div>`:'<div class="empty" style="margin-top:8px">이 코드에 연결된 계통도 가이드가 없습니다. 도면 캡처에 경로·부품 설명을 붙여 만들어 두면 조회할 때 바로 봅니다.</div>'}</div>
+    body=`${autoBlock(a,true)}
+<div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div class="label">현장 계통도 가이드 ${gl.length}건</div><button class="btn" type="button" data-newguide="${esc(a.code)}">+ 가이드 만들기</button></div>
+      ${gl.length?`<div class="list" style="margin-top:8px">${gl.map(guideCard).join('')}</div>`:'<p class="small muted" style="margin:6px 0 0">직접 만든 도면 설명이 있으면 여기 연결됩니다.</p>'}</div>
     <div class="card"><div class="label">점검 위치</div><p class="small" style="margin:4px 0 8px">${z.map(id=>esc(ZONES.find(x=>x.id===id).name)).join(' · ')||'—'} <span class="muted">(알람명 기준 추정)</span></p>
       <div class="diagram">${diagramSVG(z)}</div>
       <div class="legend" style="margin-top:6px"><span><i style="background:var(--zone-hi)"></i>점검 대상</span><span><i style="background:var(--zone)"></i>기타 구역</span></div></div>
@@ -509,6 +540,7 @@ document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=
 main.addEventListener('click',async e=>{
   const t=e.target.closest('button,a'); if(!t)return;
   if(t.dataset.code){go(t.dataset.code);return}
+  if(t.dataset.sys){state.view='sys';state.sid=t.dataset.sys;location.hash='s'+t.dataset.sys;render();window.scrollTo(0,0);return}
   if(t.dataset.guide){state.view='guide';state.gid=t.dataset.guide;location.hash=/^[A-Za-z0-9-]+$/.test(t.dataset.guide)?'g'+t.dataset.guide:'';render();window.scrollTo(0,0);return}
   if(t.dataset.newguide!==undefined){openGuideForm(t.dataset.newguide==='1'?'':t.dataset.newguide);return}
   if(t.dataset.delguide){ if(t.dataset.confirm!=='1'){t.dataset.confirm='1';t.textContent='한 번 더 누르면 삭제';return}
@@ -540,7 +572,7 @@ main.addEventListener('submit',async e=>{
   catch(err){toast('올리지 못했습니다: '+(err.code||err.message||'오류'))}
 });
 function go(code){const al=!BY[code]&&aliasOf(code);state.aliasFrom=al?code:'';if(al)code=al.to;state.view='alarm';state.code=code;state.tab='meaning';state.wtg='';location.hash='a'+code;render();window.scrollTo(0,0)}
-function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){const al=!BY[m[1]]&&aliasOf(m[1]);state.aliasFrom=al?m[1]:'';state.view='alarm';state.code=al?al.to:m[1];$('#q').value=m[1]}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about')state.view=h;render()}
+function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){const al=!BY[m[1]]&&aliasOf(m[1]);state.aliasFrom=al?m[1]:'';state.view='alarm';state.code=al?al.to:m[1];$('#q').value=m[1]}else if(/^s[a-z]+$/.test(h)&&SYSBY[h.slice(1)]){state.view='sys';state.sid=h.slice(1)}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about')state.view=h;render()}
 window.addEventListener('hashchange',fromHash);
 
 loadStatic().then(()=>{fromHash();connect();});
