@@ -149,7 +149,7 @@ form.f{display:grid;gap:10px}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const main=$('#main');
-let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[];
+let ALARMS=[],BY={},HIST=[],HBY={},SOURCES=[],SOL=[],DRW=[],GUIDES=[],ALIAS={};
 let db=null,assets=null,user=null,downloads=null,myId=null;
 let state={view:'home',code:null,tab:'meaning',query:''};
 
@@ -250,6 +250,7 @@ async function connect(){
   try{ myId=user?await user.id():null; }catch(e){}
   db.collection('solutions').orderBy('createdAt','desc').onSnapshot(s=>{SOL=s.docs.map(d=>({id:d.id,...d.data()}));setSync('공유 저장소 연결됨 · 등록 '+SOL.length+'건');render();},e=>setSync('공유 저장소 오류: '+e.code));
   db.collection('drawings').orderBy('createdAt','desc').onSnapshot(s=>{DRW=s.docs.map(d=>({id:d.id,...d.data()}));render();},()=>{});
+  db.doc('settings/aliases').onSnapshot(d=>{ALIAS=(d.exists&&d.data().map)||{};render();},()=>{});
   db.collection('guides').orderBy('createdAt','desc').onSnapshot(s=>{GUIDES=s.docs.map(d=>({id:d.id,...d.data()}));if(state.view!=='gform'&&state.view!=='form')render();},()=>{});
 }
 function localMode(){ if(db)return; const o=lsGet(); SOL=o.sol;DRW=o.drw; setSync('이 기기에만 저장 (오프라인 모드)'); render(); }
@@ -260,8 +261,10 @@ function lvl(a){const w=a.code[0]==='1';return `<span class="lv ${w?'w':'e'}">${
 function solFor(code){return SOL.filter(s=>s.code===code)}
 function drwFor(code){return DRW.filter(s=>s.code===code)}
 function guidesFor(code){return GUIDES.filter(g=>(g.codes||[]).includes(code))}
+function aliasOf(code){const x=ALIAS[code];return x&&x.to?x:null}
 function getAlarm(code){
   if(BY[code])return BY[code];
+  const al=aliasOf(code); if(al&&BY[al.to])return BY[al.to];
   if(/^\d{4}$/.test(code)&&(guidesFor(code).length||solFor(code).length||drwFor(code).length))
     return {code,level:'',category:'알람리스트 미등재',type:'',page:'',name:'U88/U93 알람리스트에 없는 코드',condition:'',brake:'',yaw:'',reset:'',repeat:'',desc_ko:'',src:'none'};
   return null;
@@ -302,8 +305,9 @@ function renderHome(){
   const q=state.query;
   if(q){
     const r=searchAlarms(q), gs=searchGuides(q), x=getAlarm(q.trim());
-    if(x&&!BY[q.trim()]) r.unshift(x);
-    main.innerHTML=`<section class="view">${gs.length?`<div class="label">계통도 가이드 ${gs.length}건</div><div class="list">${gs.map(guideCard).join('')}</div>`:''}<div class="label">알람 검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
+    const al=aliasOf(q.trim());
+    if(x&&!BY[q.trim()]&&!r.includes(x)) r.unshift(x);
+    main.innerHTML=`<section class="view">${gs.length?`<div class="label">계통도 가이드 ${gs.length}건</div><div class="list">${gs.map(guideCard).join('')}</div>`:''}${al?`<div class="note"><b>${esc(q.trim())}</b> → <b>${esc(al.to)}</b>로 기록된 코드입니다. ${esc(al.note||'')}</div>`:''}<div class="label">알람 검색 결과 ${r.length}건</div>${r.length?`<div class="list">${r.slice(0,80).map(rowHTML).join('')}</div>`:`<div class="empty">"${esc(q)}"에 해당하는 알람이 알람리스트에 없습니다.<br>코드를 다시 확인하거나 영문 키워드로 검색해 보세요.</div>`}</section>`;
     return;
   }
   FREQ=FREQ||freq();
@@ -383,7 +387,8 @@ function renderAlarm(a){
   main.innerHTML=`<section class="view">
     <div class="card hero"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="big">${esc(a.code)}</span>${lvl(a)}</div>
       <div class="title">${esc(a.name)}</div>
-      <div class="small muted">${esc(a.category)} · ${esc(a.type)}${a.reset?' · Reset '+esc(a.reset):''}</div></div>
+      <div class="small muted">${esc(a.category)} · ${esc(a.type)}${a.reset?' · Reset '+esc(a.reset):''}</div>
+      ${(()=>{const from=state.aliasFrom||Object.keys(ALIAS).filter(k=>ALIAS[k].to===a.code).join(', ');return from?`<div class="note">현장 표기 <b>${esc(from)}</b> = 이 알람(${esc(a.code)})으로 기록되어 있습니다.${ALIAS[from]&&ALIAS[from].note?' '+esc(ALIAS[from].note):''}</div>`:''})()}</div>
     <div class="tabs" role="tablist">${tabs.map(([k,t])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${state.tab===k}">${esc(t)}</button>`).join('')}</div>
     ${body}</section>`;
 }
@@ -534,8 +539,8 @@ main.addEventListener('submit',async e=>{
   try{const r=await assets.upload(await shrink(f));await db.collection('drawings').add({code:state.code,asset:r.id,caption:$('#drwCap').value.trim(),createdAt:new Date().toISOString(),author:myId||''});toast('도면을 올렸습니다')}
   catch(err){toast('올리지 못했습니다: '+(err.code||err.message||'오류'))}
 });
-function go(code){state.view='alarm';state.code=code;state.tab='meaning';state.wtg='';location.hash='a'+code;render();window.scrollTo(0,0)}
-function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){state.view='alarm';state.code=m[1];$('#q').value=m[1]}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about')state.view=h;render()}
+function go(code){const al=!BY[code]&&aliasOf(code);state.aliasFrom=al?code:'';if(al)code=al.to;state.view='alarm';state.code=code;state.tab='meaning';state.wtg='';location.hash='a'+code;render();window.scrollTo(0,0)}
+function fromHash(){const h=location.hash.slice(1);const m=h.match(/^a(\d{4})$/);if(m){const al=!BY[m[1]]&&aliasOf(m[1]);state.aliasFrom=al?m[1]:'';state.view='alarm';state.code=al?al.to:m[1];$('#q').value=m[1]}else if(/^g[A-Za-z0-9-]+$/.test(h)){state.view='guide';state.gid=h.slice(1)}else if(h==='log'||h==='about')state.view=h;render()}
 window.addEventListener('hashchange',fromHash);
 
 loadStatic().then(()=>{fromHash();connect();});
